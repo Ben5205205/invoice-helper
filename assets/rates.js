@@ -1,10 +1,10 @@
 /* All tax figures used by taxtools.tw live here. Update this file when the law changes; every tool reads from it.
    checked: the date these figures were last verified against official sources. */
 window.RATES = {
-  checked: "2026-10-25",
+  checked: "2026-11-01",
   year: 115,
   basicWage: 29500,                                     // 最低工資（舊稱基本工資，115/1/1 起；時薪 196 元）
-  nextMinWage: { from: "2027-01-01", month: 30900, hour: 205 }, // 116/1/1 起（行政院 115/10/14 核定）；1/1 當天要把 basicWage 等數字換成新值
+  nextMinWage: { from: "2027-01-01", month: 30900, hour: 205 }, // 116/1/1 起（最低工資審議會 115/9/24 決議、勞動部 115/10/16 公布）；1/1 當天要把 basicWage 等數字換成新值
   salaryDeduction: 227000,                               // 115 年度薪資所得特別扣除額（財政部 114/11/27 公告）
   vat: { rate: 0.05 },                                   // 加值型營業稅 5%
   rent: {                                                // 各類所得扣繳率標準：租賃所得
