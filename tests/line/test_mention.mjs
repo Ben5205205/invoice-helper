@@ -4,6 +4,8 @@ import { createHmac } from "node:crypto";
 const R = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const sq = new DatabaseSync(":memory:");
 sq.exec(readFileSync(R + "/db/line.sql", "utf8"));
+// 每月 1 號早上 9 點後計時器會傳上個月報表，測試當成已經傳過，免得哪天跑測試多一則推播
+sq.prepare("INSERT OR IGNORE INTO line_reports(month,data,created) VALUES(?,?,?)").run(new Date(Date.now() + 8 * 3600e3 - 2 * 864e5).toISOString().slice(0, 7), "{}", Date.now());
 const db = { prepare(q) { const st = sq.prepare(q); let a = []; const o = {
   bind(...x) { a = x.map(v => v === undefined ? null : v); return o; },
   async first() { return st.get(...a) ?? null; }, async all() { return { results: st.all(...a) }; },
