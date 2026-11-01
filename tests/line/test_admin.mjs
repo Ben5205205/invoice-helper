@@ -13,13 +13,14 @@ sq.prepare("INSERT INTO line_kv VALUES('admins',?)").run(JSON.stringify(["U_ben"
 sq.prepare("INSERT INTO line_kv VALUES('gas:conf',?)").run(JSON.stringify({ url: "https://gas.example/exec", key: "k" }));
 const groups = { Cg1: { U_ben: "Ben", U_amy: "Amy" }, Cg2: { U_amy: "Amy", U_tom: "Tom" } };
 const names = { U_ben: "Ben", U_amy: "Amy", U_tom: "Tom" };
-let calls = [], claudeSeen = [];
+let calls = [], claudeSeen = [], sentN = 0;
 globalThis.fetch = async (url, init = {}) => {
   url = String(url); const body = init.body && typeof init.body === "string" ? JSON.parse(init.body) : null; calls.push({ url, body });
   const J = (j, s = 200) => new Response(JSON.stringify(j), { status: s });
   let m = url.match(/\/group\/(\w+)\/member\/(\w+)/); if (m) return groups[m[1]]?.[m[2]] ? J({ displayName: groups[m[1]][m[2]] }) : J({}, 404);
   m = url.match(/\/profile\/(\w+)/); if (m) return J({ displayName: names[m[1]] });
   if (url.includes("/count")) return J({ count: 3 });
+  if (url.endsWith("/message/push") || url.endsWith("/message/reply")) return J({ sentMessages: (body.messages || []).map((_, i) => ({ id: "bot" + (++sentN) + "_" + i })) });
   if (url.startsWith("https://gas.example")) return J({ ok: true, result: { id: "S1", url: "https://sheet", name: "廠商帳｜測試", tab: "記帳", headers: ["日期", "品項"] } });
   if (url.includes("api.anthropic.com")) {
     claudeSeen.push(body);
@@ -99,4 +100,19 @@ t(sq.prepare("SELECT chat_id FROM line_memory WHERE created_by='U_ben'").get()?.
 // 7. 舊說法不見了
 const src = readFileSync(R + "/lib/assistant.js", "utf8") + readFileSync(R + "/functions/api/line/webhook.js", "utf8") + readFileSync(R + "/lib/audio.js", "utf8") + readFileSync(R + "/lib/books.js", "utf8");
 t(!/請管理員|只有管理員(可以|能)|告訴他要請管理員/.test(src.replace(/\/\/.*$/gm, "").replace(/description: "[^"]*"/g, "")), "no 'ask the admin' phrasing left");
+// 費用：明確問數字 → 直接給報表；問平台、來源，或引用某則訊息在問 → 交給 AI，而且 AI 看得到被引用的內容
+const dm = (text, extra = {}) => send({ type: "message", source: { type: "user", userId: "U_ben" }, message: { type: "text", id: "dm" + n, text, ...extra } });
+await dm("這個月費用");
+t(/開銷（到目前為止）/.test(txt(lastMsgs)) && !claudeSeen.length, "plain cost → shortcut");
+await dm("這些費用的收取平台為？");
+t(claudeSeen.length > 0 && !/開銷（到目前為止）/.test(txt(lastMsgs)), "platform question → AI");
+t(/Anthropic 收/.test(JSON.stringify(claudeSeen[0].system)), "AI knows who bills what");
+const usage = await import(R + "/lib/usage.js");
+calls = []; await usage.notifyAdmins(env, db, "2026 年 10 月開銷報表\n・AI 費用：US$2.81");
+const pid = "bot" + sentN + "_0";
+t(sq.prepare("SELECT COUNT(*) n FROM line_history WHERE chat_id='U_ben' AND text LIKE '%10 月開銷報表%'").get().n === 1, "report saved to DM history");
+await dm("這些費用的收取平台為？", { quotedMessageId: pid });
+t(claudeSeen.length > 0 && JSON.stringify(claudeSeen[0].messages).includes("回覆你之前傳的這則訊息") && JSON.stringify(claudeSeen[0].messages).includes("10 月開銷報表"), "quoted report passed to AI");
+await dm("費用", { quotedMessageId: pid });
+t(claudeSeen.length > 0, "quoted + 費用 → AI, not shortcut");
 console.log(`${ok} passed, ${bad} failed`);

@@ -5,7 +5,7 @@ import { toBlocks } from "../../../lib/files.js";
 import { verifySignature, lineClient, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
 import { watchCommit, settleCommit } from "../../../lib/commit.js";
 import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard } from "../../../lib/split.js";
-import { chat, member, isGroup, kv, rid, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
+import { chat, member, isGroup, kv, rid, rememberSent, quotedBot, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
 import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../../lib/books.js";
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
 import { adminFor, decisionCard, newDecision, toAdmin, watchAdmin } from "../../../lib/escalate.js";
@@ -208,7 +208,8 @@ async function handle(env, ev, origin) {
     if (p) return reply(await settlePending(env, db, chatId, userId, p.id, c.startsWith("確認"), who.name));
   }
   // ---- 管理員：本月用量 ----
-  if (!group && c.length <= 20 && /(用量|花費|開銷|費用|花了多少|花多少|帳單|token)/i.test(c) && !/記帳|報價|運費|單價/.test(c) && (await isAdmin(db, userId)))
+  // 只有很明確在問「目前花多少」才直接給數字；問來源、平台、為什麼、或是引用某則訊息在問，交給 AI
+  if (!group && !msg.quotedMessageId && c.length <= 20 && /(用量|花費|開銷|費用|花了多少|花多少|token)/i.test(c) && !/記帳|報價|運費|單價|什麼|甚麼|哪|誰|平台|怎麼|為什麼|如何|收取|來源|從哪|差|比較|\?|？/.test(c) && (await isAdmin(db, userId)))
     return reply(reportText(await buildReport(env, db, new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 7))).replace("開銷報表", "開銷（到目前為止）"));
   // ---- 管理員與記帳表 ----
   if (!group && c === "我是管理員") {
@@ -362,7 +363,10 @@ async function handle(env, ev, origin) {
     const q = `（${who.name} 只 @ 了你，沒有另外說內容。看最近的群組對話，特別是 ${who.name} 剛才說的話，判斷他要你做什麼並直接處理。只處理他最新、還沒處理過的那件事，已經處理過的（標了［已完成］）不要再做；真的看不出來才簡短問一句。）`;
     return answer({ env, db, line, ev, chatId, userId, userName: who.name, origin, chips, rawText: raw }, q, "（@了小助理）");
   }
-  return answer({ env, db, line, ev, chatId, userId, userName: who.name, origin, chips, rawText: raw }, ask, ask, attach);
+  // 回覆（引用）的是小幫手自己傳的訊息：把那則內容一起給 AI，才知道「這些」「上面那個」指什麼
+  const qb = !attach && msg.quotedMessageId ? await quotedBot(db, msg.quotedMessageId) : null;
+  const ask2 = qb ? `（${who.name} 是回覆你之前傳的這則訊息在問：「${qb.slice(0, 2500)}」）\n${ask}` : ask;
+  return answer({ env, db, line, ev, chatId, userId, userName: who.name, origin, chips, rawText: raw }, ask2, ask, attach);
 }
 
 /* 讀帳單並在群組 @Ben 問人名（讀帳單要 20～40 秒，回覆權杖過期就改推播） */
@@ -572,7 +576,7 @@ async function answer(ctx, text, logText, attach) {
   const parts = splitText(out, 4800).slice(0, 5 - extra.length);
   const msgs = parts.map((p, i) => textMessage(p, i === parts.length - 1 ? quick : undefined));
   msgs.push(...extra);
-  await line.reply(ev.replyToken, msgs).catch(async e => {
+  await line.reply(ev.replyToken, msgs).then(res => rememberSent(db, res, msgs)).catch(async e => {
     console.log("reply failed, pushing", e.message);
     // 回覆權杖過期 → 用推播；卡片或 @ 被拒 → 只送文字
     const plain = msgs.filter(m => m.type === "text");
