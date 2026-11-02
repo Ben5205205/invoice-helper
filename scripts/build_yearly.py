@@ -17,7 +17,7 @@ for m in range(1, 13):
     for k, i in enumerate(ms):
         moved = f'<small>原 {d(i["orig"]).month}/{d(i["orig"]).day}，遇假日順延</small>' if i.get("orig") else ""
         link = f' <a href="{i["link"]}">試算</a>' if i.get("link") else ""
-        rows.append(f'<tr>{f"<th rowspan={len(ms)} scope=rowgroup>{m} 月</th>" if k == 0 else ""}<td class="n">{md(i["due"])}{moved}</td><td><b>{html.escape(i["title"])}</b><span>{html.escape(i["desc"])}{link}</span></td><td class="r">{"、".join(ROLE[r] for r in i["roles"])}</td></tr>')
+        rows.append(f'<tr>{f"<th rowspan={len(ms)} scope=rowgroup>{m} 月</th>" if k == 0 else ""}<td class="n">{md(i["due"])}{moved}</td><td><b>{html.escape(i["title"])}</b><em class="who">{"、".join(ROLE[r] for r in i["roles"])}</em><span>{html.escape(i["desc"])}{link}</span></td><td class="r">{"、".join(ROLE[r] for r in i["roles"])}</td></tr>')
 roc = Y - 1911
 mon = sorted({(d(i["due"]).month, i["title"].split(" ")[0] if False else i["id"].split("-")[0]) for i in monthly})
 title = f"{Y} 國稅局報稅月曆（{roc} 年）｜營業稅、扣繳、綜所稅期限總表"
@@ -53,7 +53,15 @@ page = f'''<!doctype html>
 .yr td.r{{color:var(--muted);font-size:14px;white-space:nowrap}}
 .yr col.c1{{width:4.5em}} .yr col.c2{{width:9.5em}} .yr col.c4{{width:11em}}
 .monthly{{display:grid;gap:4px;font-size:15px}}
-@media (max-width:640px){{.yr td.r{{white-space:normal}}}}
+.yr td em.who{{display:none}}
+@media (max-width:640px){{
+  .yr col.c1{{width:2.6em}} .yr col.c2{{width:5.6em}} .yr col.c4{{width:0}}
+  .yr thead th:nth-child(4),.yr td.r{{display:none}}
+  .yr th,.yr td{{padding:8px 6px}} .yr tbody th{{font-size:15px}}
+  .yr td.n{{white-space:normal}} .yr td.n small{{font-size:11.5px}}
+  .yr td span{{display:block}}
+  .yr td em.who{{display:inline-block;font-style:normal;font-size:12.5px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;margin:2px 0 4px}}
+}}
 @media print{{
   @page{{size:A4;margin:12mm}}
   body{{background:#fff;font-size:11pt}}

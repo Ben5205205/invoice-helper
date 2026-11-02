@@ -29,7 +29,15 @@
 .yr td.r{color:var(--muted);font-size:14px;white-space:nowrap}
 .yr col.c1{width:4.5em} .yr col.c2{width:9.5em} .yr col.c4{width:11em}
 .monthly{display:grid;gap:4px;font-size:15px}
-@media (max-width:640px){.yr td.r{white-space:normal}}
+.yr td em.who{display:none}
+@media (max-width:640px){
+  .yr col.c1{width:2.6em} .yr col.c2{width:5.6em} .yr col.c4{width:0}
+  .yr thead th:nth-child(4),.yr td.r{display:none}
+  .yr th,.yr td{padding:8px 6px} .yr tbody th{font-size:15px}
+  .yr td.n{white-space:normal} .yr td.n small{font-size:11.5px}
+  .yr td span{display:block}
+  .yr td em.who{display:inline-block;font-style:normal;font-size:12.5px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px;margin:2px 0 4px}
+}
 @media print{
   @page{size:A4;margin:12mm}
   body{background:#fff;font-size:11pt}
@@ -70,23 +78,23 @@
       <colgroup><col class="c1"><col class="c2"><col><col class="c4"></colgroup>
       <thead><tr><th>月份</th><th>期限</th><th>要做的事</th><th>誰要做</th></tr></thead>
       <tbody>
-<tr><th rowspan=1 scope=rowgroup>1 月</th><td class="n">1/15（五）</td><td><b>營業稅申報（11–12 月）</b><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
-<tr><th rowspan=4 scope=rowgroup>2 月</th><td class="n">2/1（一）<small>原 1/31，遇假日順延</small></td><td><b>申報 115 年度扣繳憑單</b><span>上一年度付給個人的薪資、租金、勞報等，向國稅局申報扣繳憑單或免扣繳憑單。1 月有連續 3 天以上國定假日時延長到 2 月 5 日，以財政部公告為準。</span></td><td class="r">公司・行號</td></tr>
-<tr><td class="n">2/1（一）<small>原 1/31，遇假日順延</small></td><td><b>申報補充保費扣費明細</b><span>向健保署申報上一年度代扣補充保費的明細；每次繳費時已經一併申報的就不用再報。</span></td><td class="r">公司・行號</td></tr>
-<tr><td class="n">2/11（四）<small>原 2/10，遇假日順延</small></td><td><b>把扣繳憑單交給所得人</b><span>把扣繳憑單寄給員工、房東、接案者，他們報稅要用。申報期間延長時，交付期限延到 2 月 15 日。</span></td><td class="r">公司・行號</td></tr>
-<tr><td class="n">2/11（四）<small>原 2/10，遇假日順延</small></td><td><b>確認收到扣繳憑單</b><span>公司應在這天前把扣繳憑單寄給你；沒收到可以跟對方要，報稅時也能用自然人憑證或健保卡下載所得資料。 <a href="/labor-report/#payee">試算</a></span></td><td class="r">上班族・接案、房東・屋主</td></tr>
-<tr><th rowspan=1 scope=rowgroup>3 月</th><td class="n">3/15（一）</td><td><b>營業稅申報（1–2 月）</b><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
-<tr><th rowspan=5 scope=rowgroup>5 月</th><td class="n">5/3（一）<small>原 4/30，遇假日順延</small></td><td><b>繳納使用牌照稅</b><span>自用汽機車一年繳一次（150cc 以下機車免稅）；營業用車分 4 月、10 月兩期。</span></td><td class="r">有車</td></tr>
-<tr><td class="n">5/17（一）<small>原 5/15，遇假日順延</small></td><td><b>營業稅申報（3–4 月）</b><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
-<tr><td class="n">5/31（一）</td><td><b>申報 115 年度營利事業所得稅</b><span>會計年度採曆年制的公司，申報上一年度營利事業所得稅和未分配盈餘。</span></td><td class="r">公司・行號</td></tr>
-<tr><td class="n">5/31（一）</td><td><b>申報 115 年度綜合所得稅</b><span>個人報上一年度的所得，薪資、租金、勞報、股利都要列入；被扣繳的稅可以抵減，多扣的會退。 <a href="/income-tax/">試算</a></span></td><td class="r">上班族・接案、房東・屋主、公司・行號</td></tr>
-<tr><td class="n">5/31（一）</td><td><b>繳納房屋稅</b><span>地方稅務局寄發稅單，繳納上一年度 7 月到今年 6 月的房屋稅。自住和出租的稅率不同。 <a href="/landlord-tax/">試算</a></span></td><td class="r">房東・屋主</td></tr>
-<tr><th rowspan=1 scope=rowgroup>7 月</th><td class="n">7/15（四）</td><td><b>營業稅申報（5–6 月）</b><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
-<tr><th rowspan=2 scope=rowgroup>9 月</th><td class="n">9/16（四）<small>原 9/15，遇假日順延</small></td><td><b>營業稅申報（7–8 月）</b><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
-<tr><td class="n">9/30（四）</td><td><b>營利事業所得稅暫繳申報</b><span>按上年度應納稅額的一半暫繳。獨資、合夥、小規模營利事業、上年度沒有應納稅額，或暫繳稅額 2,000 元以下的免辦。</span></td><td class="r">公司・行號</td></tr>
-<tr><th rowspan=3 scope=rowgroup>11 月</th><td class="n">11/1（一）<small>原 10/31，遇假日順延</small></td><td><b>營業用車牌照稅（第二期）</b><span>只有營業用車需要繳第二期；自用車 4 月已經繳過全年。</span></td><td class="r">有車</td></tr>
-<tr><td class="n">11/15（一）</td><td><b>營業稅申報（9–10 月）</b><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
-<tr><td class="n">11/30（二）</td><td><b>繳納地價稅</b><span>地方稅務局寄發稅單，繳納今年度的地價稅。自用住宅用地符合條件可申請 2‰ 優惠稅率（9 月 22 日前申請）。</span></td><td class="r">房東・屋主</td></tr>
+<tr><th rowspan=1 scope=rowgroup>1 月</th><td class="n">1/15（五）</td><td><b>營業稅申報（11–12 月）</b><em class="who">公司・行號</em><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
+<tr><th rowspan=4 scope=rowgroup>2 月</th><td class="n">2/1（一）<small>原 1/31，遇假日順延</small></td><td><b>申報 115 年度扣繳憑單</b><em class="who">公司・行號</em><span>上一年度付給個人的薪資、租金、勞報等，向國稅局申報扣繳憑單或免扣繳憑單。1 月有連續 3 天以上國定假日時延長到 2 月 5 日，以財政部公告為準。</span></td><td class="r">公司・行號</td></tr>
+<tr><td class="n">2/1（一）<small>原 1/31，遇假日順延</small></td><td><b>申報補充保費扣費明細</b><em class="who">公司・行號</em><span>向健保署申報上一年度代扣補充保費的明細；每次繳費時已經一併申報的就不用再報。</span></td><td class="r">公司・行號</td></tr>
+<tr><td class="n">2/11（四）<small>原 2/10，遇假日順延</small></td><td><b>把扣繳憑單交給所得人</b><em class="who">公司・行號</em><span>把扣繳憑單寄給員工、房東、接案者，他們報稅要用。申報期間延長時，交付期限延到 2 月 15 日。</span></td><td class="r">公司・行號</td></tr>
+<tr><td class="n">2/11（四）<small>原 2/10，遇假日順延</small></td><td><b>確認收到扣繳憑單</b><em class="who">上班族・接案、房東・屋主</em><span>公司應在這天前把扣繳憑單寄給你；沒收到可以跟對方要，報稅時也能用自然人憑證或健保卡下載所得資料。 <a href="/labor-report/#payee">試算</a></span></td><td class="r">上班族・接案、房東・屋主</td></tr>
+<tr><th rowspan=1 scope=rowgroup>3 月</th><td class="n">3/15（一）</td><td><b>營業稅申報（1–2 月）</b><em class="who">公司・行號</em><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
+<tr><th rowspan=5 scope=rowgroup>5 月</th><td class="n">5/3（一）<small>原 4/30，遇假日順延</small></td><td><b>繳納使用牌照稅</b><em class="who">有車</em><span>自用汽機車一年繳一次（150cc 以下機車免稅）；營業用車分 4 月、10 月兩期。</span></td><td class="r">有車</td></tr>
+<tr><td class="n">5/17（一）<small>原 5/15，遇假日順延</small></td><td><b>營業稅申報（3–4 月）</b><em class="who">公司・行號</em><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
+<tr><td class="n">5/31（一）</td><td><b>申報 115 年度營利事業所得稅</b><em class="who">公司・行號</em><span>會計年度採曆年制的公司，申報上一年度營利事業所得稅和未分配盈餘。</span></td><td class="r">公司・行號</td></tr>
+<tr><td class="n">5/31（一）</td><td><b>申報 115 年度綜合所得稅</b><em class="who">上班族・接案、房東・屋主、公司・行號</em><span>個人報上一年度的所得，薪資、租金、勞報、股利都要列入；被扣繳的稅可以抵減，多扣的會退。 <a href="/income-tax/">試算</a></span></td><td class="r">上班族・接案、房東・屋主、公司・行號</td></tr>
+<tr><td class="n">5/31（一）</td><td><b>繳納房屋稅</b><em class="who">房東・屋主</em><span>地方稅務局寄發稅單，繳納上一年度 7 月到今年 6 月的房屋稅。自住和出租的稅率不同。 <a href="/landlord-tax/">試算</a></span></td><td class="r">房東・屋主</td></tr>
+<tr><th rowspan=1 scope=rowgroup>7 月</th><td class="n">7/15（四）</td><td><b>營業稅申報（5–6 月）</b><em class="who">公司・行號</em><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
+<tr><th rowspan=2 scope=rowgroup>9 月</th><td class="n">9/16（四）<small>原 9/15，遇假日順延</small></td><td><b>營業稅申報（7–8 月）</b><em class="who">公司・行號</em><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
+<tr><td class="n">9/30（四）</td><td><b>營利事業所得稅暫繳申報</b><em class="who">公司・行號</em><span>按上年度應納稅額的一半暫繳。獨資、合夥、小規模營利事業、上年度沒有應納稅額，或暫繳稅額 2,000 元以下的免辦。</span></td><td class="r">公司・行號</td></tr>
+<tr><th rowspan=3 scope=rowgroup>11 月</th><td class="n">11/1（一）<small>原 10/31，遇假日順延</small></td><td><b>營業用車牌照稅（第二期）</b><em class="who">有車</em><span>只有營業用車需要繳第二期；自用車 4 月已經繳過全年。</span></td><td class="r">有車</td></tr>
+<tr><td class="n">11/15（一）</td><td><b>營業稅申報（9–10 月）</b><em class="who">公司・行號</em><span>使用統一發票的營業人，申報上兩個月的銷售額並繳納營業稅；沒有銷售也要零申報。 <a href="/tax-included/">試算</a></span></td><td class="r">公司・行號</td></tr>
+<tr><td class="n">11/30（二）</td><td><b>繳納地價稅</b><em class="who">房東・屋主</em><span>地方稅務局寄發稅單，繳納今年度的地價稅。自用住宅用地符合條件可申請 2‰ 優惠稅率（9 月 22 日前申請）。</span></td><td class="r">房東・屋主</td></tr>
       </tbody>
     </table>
   </div>
