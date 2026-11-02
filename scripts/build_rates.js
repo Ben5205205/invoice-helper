@@ -15,7 +15,7 @@ const P = R.pit, I = R.insurance;
 const sections = [
   { id: "wage", h: `${R.year} 年最低工資（基本工資）`, lead: `${R.year} 年（${R.year + 1911} 年）最低工資每月 ${n(R.basicWage)} 元、每小時 196 元，${R.year} 年 1 月 1 日起適用；114 年起「基本工資」依最低工資法改稱「最低工資」。`,
     rows: [["每月最低工資", `${n(R.basicWage)} 元`, "最低工資法；勞動部公告"], ["每小時最低工資", "196 元", "最低工資法；勞動部公告"],
-           ...(R.nextMinWage ? [[`${+R.nextMinWage.from.slice(0, 4) - 1911} 年 1 月 1 日起`, `每月 ${n(R.nextMinWage.month)} 元、每小時 ${n(R.nextMinWage.hour)} 元`, "行政院 115 年 10 月 14 日核定"]] : [])], tool: ["/overtime-pay/", "加班費計算機"] },
+           ...(R.nextMinWage ? [[`${+R.nextMinWage.from.slice(0, 4) - 1911} 年 1 月 1 日起`, `每月 ${n(R.nextMinWage.month)} 元、每小時 ${n(R.nextMinWage.hour)} 元`, "勞動部 115 年 10 月 16 日公布"]] : [])], tool: ["/overtime-pay/", "加班費計算機"] },
   { id: "vat", h: "營業稅", lead: `加值型營業稅稅率 ${pct(R.vat.rate)}，含稅金額 ÷ ${1 + R.vat.rate} 就是未稅金額。`,
     rows: [["加值型營業稅稅率", pct(R.vat.rate), "加值型及非加值型營業稅法第 10 條"],
            ["小規模營業人（查定課徵）", "1%", "加值型及非加值型營業稅法第 13 條"],
@@ -35,6 +35,7 @@ const sections = [
            ["兼職薪資起扣", `單次給付達 ${n(R.nhi.partTimeMin)} 元（最低工資）`, R.sources.nhi]], tool: ["/labor-report/", "勞報單扣繳計算機"] },
   { id: "insurance", h: "勞保、健保、勞退費率", lead: `勞保（含就業保險）費率 ${pct(I.li.ordinary + I.li.employment)}，勞工自付 ${pct(I.li.worker)}；健保費率 ${pct(I.nhi.rate)}，勞工自付 ${pct(I.nhi.worker)}；雇主勞退提繳 ${pct(I.pension)}。`,
     rows: [["勞保普通事故＋就業保險", `${pct(I.li.ordinary)}＋${pct(I.li.employment)}；勞工 ${pct(I.li.worker)}、雇主 ${pct(I.li.employer)}、政府 10%`, "勞工保險條例、就業保險法"],
+           ...(I.nextLi ? [[`${+I.nextLi.from.slice(0, 4) - 1911} 年 1 月 1 日起`, `勞保普通事故 ${pct(I.nextLi.ordinary)}＋就業保險 ${pct(I.li.employment)}，合計 ${pct(I.nextLi.ordinary + I.li.employment)}（負擔比例不變）`, "勞工保險條例第 13 條；勞保局 115 年 10 月 21 日公告"]] : []),
            ["勞保投保薪資", `最低 ${n(I.liGrades[0])} 元（部分工時）、最高 ${n(I.li.max)} 元`, "勞工保險投保薪資分級表"],
            ["職災保險", `上下班 ${pct(I.occ.commute)}＋行業別費率（平均 ${pct(I.occ.industryAvg)}），雇主全額；投保上限 ${n(I.occ.max)} 元`, "勞工職業災害保險及保護法"],
            ["健保", `${pct(I.nhi.rate)}；勞工 ${pct(I.nhi.worker)}、雇主 ${pct(I.nhi.employer)}；平均眷口數 ${I.nhi.avgDependents}`, "全民健康保險法"],
@@ -89,9 +90,9 @@ const html = `<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <meta name="tt-font" content="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
-<link rel="stylesheet" href="/assets/base.css?v=2026103101">
-<link rel="stylesheet" href="/assets/nav.css?v=2026103101">
-<link rel="stylesheet" href="/assets/guide.css?v=2026103101">
+<link rel="stylesheet" href="/assets/base.css?v=2026110301">
+<link rel="stylesheet" href="/assets/nav.css?v=2026110301">
+<link rel="stylesheet" href="/assets/guide.css?v=2026110301">
 <!--seo-->
 <!--/seo-->
 </head>
@@ -118,7 +119,7 @@ ${body}
 
   <p class="site-foot">本頁依現行法規整理，僅供參考，實際以財政部、勞動部等主管機關規定為準。</p>
 </div>
-<script src="/assets/nav.js?v=2026103101"></script>
+<script src="/assets/nav.js?v=2026110301"></script>
 </body>
 </html>
 `;
