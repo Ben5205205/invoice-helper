@@ -20,8 +20,8 @@ for m in range(1, 13):
         rows.append(f'<tr>{f"<th rowspan={len(ms)} scope=rowgroup>{m} 月</th>" if k == 0 else ""}<td class="n">{md(i["due"])}{moved}</td><td><b>{html.escape(i["title"])}</b><span>{html.escape(i["desc"])}{link}</span></td><td class="r">{"、".join(ROLE[r] for r in i["roles"])}</td></tr>')
 roc = Y - 1911
 mon = sorted({(d(i["due"]).month, i["title"].split(" ")[0] if False else i["id"].split("-")[0]) for i in monthly})
-title = f"{roc} 年報稅行事曆總表（{Y}）｜營業稅、扣繳、綜所稅、房屋稅期限一頁看完"
-desc = f"{roc} 年（{Y} 年）全年報稅、繳費期限一頁看完：營業稅、扣繳憑單、綜所稅、房屋稅、地價稅、牌照稅，已依假日順延，可以列印或存成 PDF。"
+title = f"{Y} 國稅局報稅月曆（{roc} 年）｜營業稅、扣繳、綜所稅期限總表"
+desc = f"{Y}（{roc} 年）國稅局報稅月曆：依財政部、國稅局公告的申報期限整理，營業稅、扣繳憑單、綜所稅、房屋稅、地價稅、牌照稅，已依假日順延，可以列印或存成 PDF。"
 page = f'''<!doctype html>
 <html lang="zh-Hant-TW">
 <head>
@@ -37,9 +37,9 @@ page = f'''<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <meta name="tt-font" content="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
-<link rel="stylesheet" href="/assets/base.css?v=2026102802">
-<link rel="stylesheet" href="/assets/nav.css?v=2026102802">
-<link rel="stylesheet" href="/assets/guide.css?v=2026102802">
+<link rel="stylesheet" href="/assets/base.css?v=2026103101">
+<link rel="stylesheet" href="/assets/nav.css?v=2026103101">
+<link rel="stylesheet" href="/assets/guide.css?v=2026103101">
 <style>
 .yr{{max-width:980px}}
 .yr table{{border-collapse:collapse;width:100%;font-size:15px;line-height:1.55}}
@@ -73,7 +73,7 @@ page = f'''<!doctype html>
 <div class="wrap" role="main">
   <div class="page-head">
     <p class="crumb no-print"><a href="/">稅務小工具</a>›<a href="/tax-calendar/">報稅行事曆</a></p>
-    <h1>{roc} 年報稅行事曆總表</h1>
+    <h1>{roc} 年國稅局報稅月曆總表（{Y}）</h1>
     <p>{roc} 年（{Y} 年）全年的報稅、繳費期限，已依行政院人事行政總處辦公日曆表順延假日。可以直接列印，或存成 PDF 貼在辦公室。</p>
     <div class="actions no-print" style="margin-top:8px"><button type="button" class="btn primary" onclick="print()">列印／存成 PDF</button><a class="btn" style="display:inline-flex;align-items:center;text-decoration:none" href="/tax-calendar/">訂閱到手機行事曆</a></div>
   </div>
@@ -96,7 +96,7 @@ page = f'''<!doctype html>
 
   <p class="site-foot">期限依所得稅法、加值型及非加值型營業稅法、全民健康保險法、勞工保險條例、房屋稅條例、土地稅法、使用牌照稅法等規定整理，假日依行政院人事行政總處辦公日曆表順延。若主管機關另行公告延長，以公告為準。資料更新：{D["generated"][:10] if "generated" in D else ""}・taxtools.tw</p>
 </div>
-<script src="/assets/nav.js?v=2026102802"></script>
+<script src="/assets/nav.js?v=2026103101"></script>
 </body>
 </html>
 '''

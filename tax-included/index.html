@@ -37,6 +37,7 @@
 .digits-wrap{overflow-x:auto}
 .rate-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .rate-row input{max-width:120px}
+.page-head .quick{margin:10px 0 8px;max-width:640px}.page-head .quick table{font-size:15px}.page-head .quick td,.page-head .quick th{padding:7px 10px}
 </style>
 <!--seo-->
 <meta property="og:type" content="website">
@@ -61,7 +62,18 @@
 <div class="wrap" role="main">
   <div class="page-head">
     <h1>含稅未稅計算機</h1>
-    <p>報價、對帳、開發票前算一下：輸入含稅或未稅金額，馬上得到銷售額、營業稅和總計，還有發票和支票用的中文大寫。</p>
+    <p><b>未稅 × 1.05 = 含稅，含稅 ÷ 1.05 = 未稅，稅額元以下四捨五入。</b>注意：× 0.95 是打 95 折，不等於未稅。</p>
+    <div class="tbl quick"><table>
+      <thead><tr><th>常見算式</th><th>答案</th><th>意思</th></tr></thead>
+      <tbody>
+        <tr><td>10000 × 0.95</td><td class="n">9,500</td><td>打 95 折，<b>不是</b>未稅</td></tr>
+        <tr><td>10000 ÷ 1.05</td><td class="n">9,524</td><td>含稅 10,000 的未稅（稅額 476）</td></tr>
+        <tr><td>500 ÷ 1.05</td><td class="n">476</td><td>含稅 500 的未稅（稅額 24）</td></tr>
+        <tr><td>500 × 1.05</td><td class="n">525</td><td>未稅 500 的含稅（稅額 25）</td></tr>
+        <tr><td>1000 × 1.05</td><td class="n">1,050</td><td>未稅 1,000 的含稅（稅額 50）</td></tr>
+      </tbody>
+    </table></div>
+    <p>其他金額直接在下面輸入，馬上得到銷售額、營業稅、總計和中文大寫。</p>
   </div>
 
   <div class="grid">
@@ -112,9 +124,8 @@
 
 
   <section class="card plain" id="table">
-    <h2>常用金額速算表：×1.05 與 ÷1.05</h2>
-    <p>未稅金額 × 1.05 就是含稅金額，含稅金額 ÷ 1.05 就是未稅金額，稅額元以下四捨五入。例如 500 × 1.05 = 525、500 ÷ 1.05 ≈ 476（稅額 24）、10,000 ÷ 1.05 ≈ 9,524。</p>
-    <p><b>常見錯誤：含稅 × 0.95 不等於未稅。</b>10,000 × 0.95 = 9,500，但正確的未稅是 10,000 ÷ 1.05 ≈ 9,524，差了 24 元。×0.95 是「打 95 折」，不是扣掉營業稅。</p>
+    <h2>常用金額速算表：100 元到 10 萬元</h2>
+    <p>以下是常用金額一覽，算法和上方相同。</p>
     <h3>未稅 → 含稅（× 1.05）</h3>
     <div class="tbl"><table>
       <thead><tr><th class="n">未稅</th><th class="n">稅額 5%</th><th class="n">含稅</th></tr></thead>
