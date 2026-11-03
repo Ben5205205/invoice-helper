@@ -54,3 +54,10 @@ CREATE TABLE IF NOT EXISTS line_splits (
   id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, bill_no TEXT, created INTEGER NOT NULL, created_by TEXT, status TEXT NOT NULL, data TEXT NOT NULL, result TEXT, done_at INTEGER);
 CREATE INDEX IF NOT EXISTS line_splits_chat ON line_splits(chat_id, created);
 CREATE TABLE IF NOT EXISTS line_split_imgs (split_id TEXT NOT NULL, n INTEGER NOT NULL, mime TEXT, data BLOB, PRIMARY KEY (split_id, n));
+
+-- 私人助理群的存檔與記事本（lib/vault.js）
+CREATE TABLE IF NOT EXISTS line_files (
+  id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, user_id TEXT, kind TEXT, name TEXT, mime TEXT, size INTEGER, caption TEXT, drive_id TEXT, url TEXT, data BLOB, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS line_files_chat ON line_files(chat_id, ts);
+CREATE TABLE IF NOT EXISTS line_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, text TEXT NOT NULL, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS line_notes_chat ON line_notes(chat_id, ts);

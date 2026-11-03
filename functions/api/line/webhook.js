@@ -10,6 +10,7 @@ import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../..
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
 import { adminFor, decisionCard, newDecision, toAdmin, watchAdmin } from "../../../lib/escalate.js";
 import { normStore, facts, sampleCard } from "../../../lib/billstats.js";
+import { isPrivate, archive, savedText, fileMessages } from "../../../lib/vault.js";
 import { setOwner } from "../../bo/index.js";
 import { handleMiao } from "../../../lib/miao.js";
 import { isAudioName, transcribe, saveTranscript, recordTranscribe, budgetLeft, findTranscripts, MAX_AUDIO } from "../../../lib/audio.js";
@@ -61,6 +62,7 @@ async function handle(env, ev, origin) {
   const userId = src.userId;
   if (!chatId) return;
   const group = isGroup(chatId);
+  const priv = group && (await isPrivate(db, chatId));   // 只有 Ben 和小幫手的私人助理群：不用 @、照片檔案自動存檔
   const chips = group ? GROUP_CHIPS : USER_CHIPS;
   const reply = (text, quick = chips) => ev.replyToken ? line.reply(ev.replyToken, [textMessage(text, quick)]).catch(e => console.log("reply failed", e.message)) : null;
 
@@ -149,6 +151,13 @@ async function handle(env, ev, origin) {
         } catch (e) { console.log("bill check", e.message); }
       }
       else if (msg.type === "file" && !who.optout) await record(db, chatId, userId, who.name, `［傳了檔案：${msg.fileName || "檔案"}］`, "file:" + msg.id);
+      // 私人助理群：照片、檔案、錄音、影片自動存檔，回一句
+      if (priv && ["image", "file", "audio", "video"].includes(msg.type)) {
+        try {
+          const r = await archive(env, db, line, { owner: (await isAdmin(db, userId)) ? "admin" : chatId, chatId, userId, msg });
+          return reply(savedText(r), audio ? [say("整理剛剛的錄音"), ...chips] : video ? [say("看一下剛剛的影片"), ...chips] : chips);
+        } catch (e) { console.log("archive failed", e.message); return reply(/太大/.test(e.message) ? e.message : "這個沒存成功，等一下再傳一次？"); }
+      }
       return;   // 群組裡的貼圖、照片、錄音不回應
     }
     // 私訊（只有 Ben）傳帳單照片：跟群組一樣直接給拆帳表單，不先分析帳目
@@ -176,7 +185,7 @@ async function handle(env, ev, origin) {
   if (typedAt) text = text.replace(/[@＠]\s?小幫手/g, "");
   text = text.trim();
   const command = text.startsWith("/") || text.startsWith("／") ? text.replace(/^[/／]\s*/, "") : null;
-  const addressed = !group || self.length > 0 || typedAt || command !== null;   // 群組裡只有 @小幫手 或按鈕送出的「/」指令才回應
+  const addressed = !group || priv || self.length > 0 || typedAt || command !== null;   // 群組裡只有 @小幫手 或按鈕送出的「/」指令才回應
 
   // 群組裡的一般訊息只記錄，不回應
   if (group && !who.optout && !(command && /^(不要記錄我|恢復記錄|清除紀錄)$/.test(command))) await record(db, chatId, userId, who.name, raw);
@@ -248,6 +257,15 @@ async function handle(env, ev, origin) {
 
   // ---- 拆帳 ----（「賬」「单」也算；說法放寬：啟動／開始／啟用、幫我拆帳…）
   const sc = c.replace(/賬/g, "帳").replace(/单/g, "單").replace(/[。！!～~\s]+$/g, "").replace(/^(請|幫我|麻煩)?/, "");
+  // ---- 私人助理群：只有管理員能設定 ----
+  if (group && /^(設成|設為|變成|開啟|取消|關閉)?私人助理群$/.test(sc)) {
+    if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能設定。");
+    if (/取消|關閉/.test(sc)) { await db.prepare("DELETE FROM line_kv WHERE k=?").bind("private:" + chatId).run(); return reply("好，這裡變回一般群組：要 @我 才會回，照片不自動存。"); }
+    const cnt = await line.memberCount(chatId).catch(() => 0);
+    if (cnt > 1) return reply("私人助理群只能有你和我兩個，這個群組還有別人，先不設。");
+    await kv.set(db, "private:" + chatId, "1");
+    return reply("好，這裡是你的私人助理群了：\n・不用 @我，說什麼我都回\n・傳照片、檔案、錄音我會自動存進雲端硬碟，之後說「找…的照片」我就傳回來\n・說「記一下…」我會記在記事本\n・這裡的紀錄不會 30 天後刪掉");
+  }
   // ---- 後台（只有管理員，私訊）：自己的連結、新增／取消內部人員 ----
   if (!group && /^(後台|後臺)(連結)?$/.test(sc) && (await isAdmin(db, userId))) {
     let t = await kv.get(db, "bome:" + userId);
@@ -573,9 +591,13 @@ async function answer(ctx, text, logText, attach) {
   if (more && !pending && !ctx.deep && !card && !docs.length && !ctx.groupPick) quick = [...(quick || []), { type: "message", label: "詳細分析", text: "/詳細分析" }];
   // 長回答切成最多 5 則（LINE 每則約 5,000 字上限），快速回覆按鈕放在最後一則
   const extra = [...(card ? [card] : []), ...(ctx.groupPick ? [groupPicker(ctx.groupPick.id, ctx.groupPick.groups, ctx.groupPick.best)] : []), ...docs.map(d => docCard(d.title, d.url)), ...(ctx.adminMsgs || [])].slice(0, 3);
-  const parts = splitText(out, 4800).slice(0, 5 - extra.length);
-  const msgs = parts.map((p, i) => textMessage(p, i === parts.length - 1 ? quick : undefined));
-  msgs.push(...extra);
+  // 從存檔叫出來的照片／檔案接在回覆後面（LINE 一次最多 5 則）
+  const files = ctx.sendFiles?.length ? (await fileMessages(env, ctx.origin, ctx.sendFiles)).slice(0, 4) : [];
+  const parts = splitText(out, 4800).slice(0, Math.max(1, 5 - extra.length - files.length));
+  const msgs = parts.map((p, i) => textMessage(p, i === parts.length - 1 && !files.length ? quick : undefined));
+  msgs.push(...files, ...extra);
+  if (files.length && quick?.length) { const last = msgs[msgs.length - 1]; if (last.type === "text") last.quickReply = { items: quick.slice(0, 13).map(q => ({ type: "action", action: q })) }; }
+  msgs.splice(5);
   await line.reply(ev.replyToken, msgs).then(res => rememberSent(db, res, msgs)).catch(async e => {
     console.log("reply failed, pushing", e.message);
     // 回覆權杖過期 → 用推播；卡片或 @ 被拒 → 只送文字

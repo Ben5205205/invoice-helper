@@ -89,8 +89,10 @@ export async function onRequestPost({ request, env }) {
     await kv.set(db, "cleanup:last", today);
     try { await buildDigests(env, db, now); } catch (e) { console.log("digests failed", e.message); }
     await db.prepare("DELETE FROM line_digests WHERE day<?").bind(ymd(now - 365 * 864e5)).run();
-    await db.prepare("DELETE FROM line_msgs WHERE ts<?").bind(now - KEEP_DAYS * 864e5).run();
-    await db.prepare("DELETE FROM line_history WHERE ts<?").bind(now - KEEP_DAYS * 864e5).run();
+    // 私人助理群的紀錄不刪（那是老闆的記事本）
+    const keepPriv = "chat_id NOT IN (SELECT substr(k, 9) FROM line_kv WHERE k LIKE 'private:%' AND v='1')";
+    await db.prepare(`DELETE FROM line_msgs WHERE ts<? AND ${keepPriv}`).bind(now - KEEP_DAYS * 864e5).run();
+    await db.prepare(`DELETE FROM line_history WHERE ts<? AND ${keepPriv}`).bind(now - KEEP_DAYS * 864e5).run();
     await db.prepare("DELETE FROM line_events WHERE ts<?").bind(now - 7 * 864e5).run();
     await db.prepare("DELETE FROM line_reminders WHERE status!='open' AND created<?").bind(now - 90 * 864e5).run();
     await db.prepare("DELETE FROM line_kv WHERE k LIKE 'ai:%' AND k<?").bind("ai:" + ymd(now - 7 * 864e5)).run();

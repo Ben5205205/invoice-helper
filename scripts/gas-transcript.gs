@@ -8,6 +8,7 @@ try {
   API_.saveDoc = saveDoc_;
   API_.createLog = createLog_;
   API_.readFile = readFile_;
+  API_.saveFile = saveFile_;
 } catch (e) { Logger.log('請把這個檔案拖到「程式碼」下面'); }
 
 function subFolder_(name) {
@@ -101,6 +102,19 @@ function readFile_(idOrUrl, onlyShared) {
   if (bytes.length > 15 * 1024 * 1024) throw new Error('TOO_BIG');
   var fname = (mt === MimeType.GOOGLE_SLIDES || mt === MimeType.GOOGLE_DRAWINGS) ? name + '.pdf' : name;
   return { name: fname, kind: 'blob', mime: blob.getContentType(), data: Utilities.base64Encode(bytes) };
+}
+
+/* 私人助理群傳的照片、檔案存進「LINE 小助理｜廠商帳 / 私人存檔 / 年-月」 */
+function saveFile_(name, mime, b64, path) {
+  var folder = folder_();
+  String(path || '私人存檔').split('/').forEach(function (p) {
+    if (!p) return;
+    var it = folder.getFoldersByName(p);
+    folder = it.hasNext() ? it.next() : folder.createFolder(p);
+  });
+  var blob = Utilities.newBlob(Utilities.base64Decode(b64), mime || 'application/octet-stream', String(name || '檔案').slice(0, 200));
+  var f = folder.createFile(blob);
+  return { id: f.getId(), url: f.getUrl(), name: f.getName() };
 }
 
 /* 第一次貼上後執行一次，讓 Google 要求「建立文件」的權限 */
