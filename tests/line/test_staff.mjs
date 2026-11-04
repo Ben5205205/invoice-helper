@@ -15,7 +15,7 @@ sq.prepare("INSERT INTO line_kv VALUES('admins',?)").run(JSON.stringify(["U_ben"
 const G = "Cstaff", today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const add = (d, n) => new Date(Date.parse(d + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
 const R1 = add(today, 6), R2 = add(today, 9);   // 一般法會、做牙
-let calls = [], extract = null, claudeBodies = [];
+let calls = [], extract = null, claudeBodies = [], plan = null;
 globalThis.fetch = async (url, init = {}) => {
   url = String(url); const body = typeof init.body === "string" ? JSON.parse(init.body) : null; calls.push({ url, body });
   const J = (j, s = 200) => new Response(JSON.stringify(j), { status: s });
@@ -28,6 +28,8 @@ globalThis.fetch = async (url, init = {}) => {
     const sys = JSON.stringify(body.system || "");
     if (/有日期的法會/.test(sys)) return J({ content: [{ type: "text", text: JSON.stringify([{ date: `${+R1.slice(5, 7)}/${+R1.slice(8)}`, name: "藥師佛聖誕法會" }, { date: `${+R2.slice(5, 7)}/${+R2.slice(8)}`, name: "做牙・福德正神法會" }]) }], usage: { input_tokens: 5, output_tokens: 5 } });
     if (/排班秘書/.test(sys)) return J({ content: [{ type: "text", text: JSON.stringify(extract || {}) }], usage: { input_tokens: 5, output_tokens: 5 } });
+    const last = JSON.stringify(body.messages.at(-1));
+    if (plan && !last.includes("tool_result")) return J({ content: [{ type: "tool_use", id: "t1", name: plan.name, input: plan.input }], stop_reason: "tool_use", usage: {} });
     return J({ content: [{ type: "text", text: "好的～" }], stop_reason: "end_turn", usage: { input_tokens: 5, output_tokens: 5 } });
   }
   return J({});
@@ -75,10 +77,19 @@ extract = { perf: [{ date: today, person: "陳小明", per_hour: 300, errors: 30
 ms = await say("U_ben", "陳小明每小時 300 張錯 30 張，今天做 8 小時；小美 5 小時蓋 1000 張錯 20");
 const pf = sq.prepare("SELECT person,per_hour,errors FROM line_perf ORDER BY id").all();
 t(pf.length === 2 && pf[1].per_hour === 200 && /記下了/.test(js(ms)) && ms.length === 1, "perf recorded, per_hour computed " + js(pf));
-ms = await say("U_q", "表現統計", true);
-t(ms[0]?.type === "flex" && /陳小明/.test(js(ms)) && /300\/時/.test(js(ms)) && /錯 1.3%/.test(js(ms)) && !claudeBodies.some(b => /排班秘書/.test(JSON.stringify(b.system))), "perf card, no extractor call");
-ms = await say("U_q", "排班", true); t(ms[0]?.type === "flex" && ms[0].contents.type === "carousel", "roster card command");
-ms = await say("U_q", "法會", true); t(/做牙：前 1 天 2 位蓋章/.test(js(ms)), "rites list");
+// AI 看懂意思再決定貼哪張卡（不是固定指令）
+extract = {}; sq.prepare("DELETE FROM line_perf WHERE id>2").run();
+plan = { name: "staff_card", input: { kind: "perf" } }; ms = await say("U_q", "誰蓋得最快？錯誤多不多", true); plan = null;
+t(ms.some(m => m.type === "flex" && /陳小明/.test(JSON.stringify(m)) && /300\/時/.test(JSON.stringify(m)) && /錯 1.3%/.test(JSON.stringify(m)) && /共 2,400 張、錯 30 張/.test(JSON.stringify(m))), "perf card via AI tool, totals shown " + js(ms).slice(0, 300));
+t(/速度不扣錯誤/.test(js(ms)), "speed not reduced by errors (stated)");
+plan = { name: "staff_card", input: { kind: "roster" } }; ms = await say("U_q", "接下來人都排好了嗎", true); plan = null;
+t(ms.some(m => m.type === "flex" && m.contents.type === "carousel"), "roster card via AI tool");
+plan = { name: "rite_set", input: { date: add(today, 20), name: "冬至祈福法會", kind: "normal" } }; await say("U_ben", "新增一場冬至祈福法會", true); plan = null;
+t(sq.prepare("SELECT COUNT(*) n FROM line_rites WHERE name='冬至祈福法會'").get().n === 1, "rite added by talking");
+plan = { name: "rite_delete", input: { date: add(today, 20) } }; await say("U_ben", "冬至那場取消", true); plan = null;
+t(sq.prepare("SELECT COUNT(*) n FROM line_rites WHERE name='冬至祈福法會'").get().n === 0, "rite deleted by talking");
+plan = null; await say("U_q", "隨便問問", true);
+t(claudeBodies.some(b => (b.tools || []).some(x => x.name === "staff_card")), "staff tools offered");
 // 8. 群組個性：開了才有，只對老闆微撩
 sq.prepare("INSERT INTO line_kv VALUES(?,?)").run("persona:" + G, "charm");
 extract = {}; await say("U_ben", "誰最快", true);
@@ -94,4 +105,8 @@ calls = []; await S.staffTick(env, db, L, at(add(d1, -1), 18)); t(!calls.some(c 
 calls = []; await S.staffTick(env, db, L, at(add(d1, -1), 9));
 p = calls.filter(c => c.url.endsWith("/message/push"));
 t(p.length === 1 && /還沒排滿/.test(p[0].body.messages[0].text) && p[0].body.messages[0].substitution?.m0?.mentionee?.userId === "U_ben", "shortage alert @Ben");
+// 隔天不是法會工作日：18:00 不提醒；法會 3 天前以外：09:00 不提醒缺人
+calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 18)); t(!calls.some(c => c.url.endsWith("/message/push")), "no evening reminder on non-work day");
+calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 9)); t(!calls.some(c => c.url.endsWith("/message/push")), "no shortage alert more than 3 days out");
+calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 6)); t(!calls.some(c => c.url.includes("96iching")), "no daily website sync");
 console.log(`${ok} passed, ${bad} failed`);
