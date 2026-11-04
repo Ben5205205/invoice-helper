@@ -109,4 +109,19 @@ t(p.length === 1 && /還沒排滿/.test(p[0].body.messages[0].text) && p[0].body
 calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 18)); t(!calls.some(c => c.url.endsWith("/message/push")), "no evening reminder on non-work day");
 calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 9)); t(!calls.some(c => c.url.endsWith("/message/push")), "no shortage alert more than 3 days out");
 calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 6)); t(!calls.some(c => c.url.includes("96iching")), "no daily website sync");
+// 法會當天也是隔天法會的蓋章日：蓋章算在隔天那場，不會跑到「其他排班」，當天那張卡會提一句
+{
+  const sl = S.slots([{ date: "2027-03-10", name: "甲", kind: "normal" }, { date: "2027-03-11", name: "乙", kind: "yaya" }]);
+  const d10 = sl.filter(n => n.date === "2027-03-10");
+  t(d10.length === 2 && d10.find(n => n.role === "現場").rites[0].name === "甲" && d10.find(n => n.role === "蓋章").rites[0].name === "乙" && d10.find(n => n.role === "蓋章").min === 2, "rite day doubles as next rite's stamp day");
+  const sl2 = S.slots([{ date: "2027-03-10", name: "甲", kind: "normal" }, { date: "2027-03-12", name: "丙", kind: "normal" }]);
+  const d9 = sl2.filter(n => n.date === "2027-03-09");
+  t(d9.length === 1 && d9[0].rites.length === 2 && d9[0].min === 3, "overlapping stamp day counted once");
+  sq.prepare("INSERT INTO line_rites(date,name,kind,updated) VALUES(?,?,?,?)").run("2027-03-10", "甲法會", "normal", Date.now());
+  sq.prepare("INSERT INTO line_rites(date,name,kind,updated) VALUES(?,?,?,?)").run("2027-03-11", "乙做牙", "yaya", Date.now());
+  sq.prepare("INSERT INTO line_shifts(chat_id,date,person,role,status,ts) VALUES(?,?,?,?,?,?)").run(G, "2027-03-10", "邱姝怡", "蓋章", "ok", Date.now());
+  const card = JSON.stringify(await S.rosterCard(db, G, "2027-03-05"));
+  const bs = JSON.parse(card).contents.contents;
+  t(!/其他排班/.test(card) && JSON.stringify(bs.find(b => /乙做牙/.test(JSON.stringify(b)))).includes("邱姝怡") && /這天也要蓋章/.test(JSON.stringify(bs.find(b => /甲法會/.test(JSON.stringify(b))))), "card puts stamp under next rite " + card.slice(0, 200));
+}
 console.log(`${ok} passed, ${bad} failed`);
