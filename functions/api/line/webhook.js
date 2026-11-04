@@ -10,7 +10,7 @@ import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../..
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
 import { adminFor, decisionCard, newDecision, toAdmin, watchAdmin } from "../../../lib/escalate.js";
 import { normStore, facts, sampleCard } from "../../../lib/billstats.js";
-import { isPrivate, archive, savedText, fileMessages } from "../../../lib/vault.js";
+import { isPrivate, archive, addPending, saveCmd, savePending, fileMessages } from "../../../lib/vault.js";
 import { staffOn, watchStaff } from "../../../lib/staffing.js";
 import { setOwner } from "../../bo/index.js";
 import { handleMiao } from "../../../lib/miao.js";
@@ -152,13 +152,8 @@ async function handle(env, ev, origin) {
         } catch (e) { console.log("bill check", e.message); }
       }
       else if (msg.type === "file" && !who.optout) await record(db, chatId, userId, who.name, `［傳了檔案：${msg.fileName || "檔案"}］`, "file:" + msg.id);
-      // 私人助理群：照片、檔案、錄音、影片自動存檔，回一句
-      if (priv && ["image", "file", "audio", "video"].includes(msg.type)) {
-        try {
-          const r = await archive(env, db, line, { owner: (await isAdmin(db, userId)) ? "admin" : chatId, chatId, userId, msg });
-          return reply(savedText(r), audio ? [say("整理剛剛的錄音"), ...chips] : video ? [say("看一下剛剛的影片"), ...chips] : chips);
-        } catch (e) { console.log("archive failed", e.message); return reply(/太大/.test(e.message) ? e.message : "這個沒存成功，等一下再傳一次？"); }
-      }
+      // 私人助理群：照片、檔案先記著不存、不回；老闆說「存 標題」才存
+      if (priv && ["image", "file", "audio", "video"].includes(msg.type)) { await addPending(db, chatId, { id: msg.id, type: msg.type, fileName: msg.fileName || "", ts: ev.timestamp || Date.now() }); return; }
       return;   // 群組裡的貼圖、照片、錄音不回應
     }
     // 私訊（只有 Ben）傳帳單照片：跟群組一樣直接給拆帳表單，不先分析帳目
@@ -276,7 +271,13 @@ async function handle(env, ev, origin) {
     const cnt = await line.memberCount(chatId).catch(() => 0);
     if (cnt > 1) return reply("私人助理群只能有你和我兩個，這個群組還有別人，先不設。");
     await kv.set(db, "private:" + chatId, "1");
-    return reply("好，這裡是你的私人助理群了：\n・不用 @我，說什麼我都回\n・傳照片、檔案、錄音我會自動存進雲端硬碟，之後說「找…的照片」我就傳回來\n・說「記一下…」我會記在記事本\n・這裡的紀錄不會 30 天後刪掉");
+    return reply("好，這裡是你的私人助理群了：\n・不用 @我，說什麼我都回\n・傳照片、檔案後說「存 標題」，我就存進雲端硬碟同名資料夾；之後說「找…的照片」我就傳回來\n・說「記一下…」我會記在記事本\n・這裡的紀錄不會 30 天後刪掉");
+  }
+  // ---- 私人助理群：「存 標題」把剛剛傳的照片／檔案存進雲端硬碟的「標題」資料夾 ----
+  const svc = priv ? saveCmd(c) : null;
+  if (svc) {
+    const r = await savePending(env, db, line, { owner: (await isAdmin(db, userId)) ? "admin" : chatId, chatId, userId, title: svc.title, quoted: msg.quotedMessageId });
+    if (r) return reply(r);
   }
   // ---- 後台（只有管理員，私訊）：自己的連結、新增／取消內部人員 ----
   if (!group && /^(後台|後臺)(連結)?$/.test(sc) && (await isAdmin(db, userId))) {

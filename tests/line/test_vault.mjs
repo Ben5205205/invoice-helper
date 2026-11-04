@@ -61,19 +61,33 @@ ms = await say(G, "U_ben", "隨便問", true);
 t(claudeBodies.length && !/貼身女秘書/.test(JSON.stringify(claudeBodies[0].system)) && !/find_files/.test(JSON.stringify(claudeBodies[0].tools)), "no persona in work group");
 ms = await say(G, "U_ben", "沒叫它");
 t(!ms.length, "work group still needs @");
-// 3. 照片自動存檔：描述＋雲端硬碟
+// 3. 照片先不存、不回；說「存 標題」才存進同名資料夾，不用 AI 看照片
 ms = await pic(P, "U_ben", "img1");
+t(!ms.length && sq.prepare("SELECT COUNT(*) n FROM line_files").get().n === 0 && !claudeBodies.some(b => /描述這張照片/.test(JSON.stringify(b))), "photo not auto-saved, no reply, no caption AI");
+await pic(P, "U_ben", "img1b");
+ms = await say(P, "U_ben", "存 疏文蓋章");
 let f = sq.prepare("SELECT * FROM line_files").all();
-t(f.length === 1 && f[0].caption === "黃色疏文，蓋了紅色印章" && f[0].drive_id === "D1" && f[0].chat_id === "admin" && !f[0].data && /收好了：黃色疏文/.test(txt(ms)), "photo archived to drive " + txt(ms));
-t(calls.some(c => c.body?.fn === "saveFile" && /^私人存檔\/\d{4}-\d{2}$/.test(c.body.args[3])), "saved into 私人存檔/年-月");
+t(f.length === 2 && f.every(x => x.caption === "疏文蓋章" && x.drive_id === "D1" && x.chat_id === "admin" && !x.data) && /存好了：2 張照片，放在「疏文蓋章」/.test(txt(ms)), "saved 2 on command " + txt(ms));
+t(calls.filter(c => c.body?.fn === "saveFile" && c.body.args[3] === "私人存檔/疏文蓋章").length === 2 && /^疏文蓋章-\d{8}-\d{4}-1\.jpg$/.test(calls.find(c => c.body?.fn === "saveFile").body.args[0]), "into 私人存檔/標題, named by title");
+t(!claudeBodies.length, "save command uses no AI");
+// 存過的不會再存；沒有待存的「存…」交給 AI（可能是記事）
+ms = await say(P, "U_ben", "存 疏文蓋章");
+t(sq.prepare("SELECT COUNT(*) n FROM line_files").get().n === 2 && claudeBodies.length, "nothing pending -> AI");
+// 回覆某張照片說存：只存那張
+await pic(P, "U_ben", "img5"); await pic(P, "U_ben", "img6");
+await send({ type: "message", source: { type: "group", groupId: P, userId: "U_ben" }, message: { type: "text", id: "mq", text: "存起來：合約", quotedMessageId: "img6" } });
+t(sq.prepare("SELECT COUNT(*) n FROM line_files WHERE caption='合約'").get().n === 1, "quoted only");
+// 問句不是存
+await say(P, "U_ben", "存在哪裡？");
+t(sq.prepare("SELECT COUNT(*) n FROM line_files").get().n === 3, "question not save");
 // 雲端硬碟還沒接好 → 先存資料庫
-gasOk = false; ms = await pic(P, "U_ben", "img2"); gasOk = true;
+gasOk = false; ms = await say(P, "U_ben", "存 雜項"); gasOk = true;
 f = sq.prepare("SELECT * FROM line_files ORDER BY ts DESC").all();
-t(f.length === 2 && f.some(x => !x.drive_id && x.data) && /還沒接好/.test(txt(ms)), "fallback to db");
+t(f.length === 4 && f.some(x => !x.drive_id && x.data && x.caption === "雜項") && /還沒接好/.test(txt(ms)), "fallback to db " + txt(ms));
 // 工作群的照片不存
-await pic(G, "U_ben", "img3"); t(sq.prepare("SELECT COUNT(*) n FROM line_files").get().n === 2, "work group photo not archived");
+await pic(G, "U_ben", "img3"); await say(G, "U_ben", "存 工作", true); t(sq.prepare("SELECT COUNT(*) n FROM line_files").get().n === 4, "work group photo not archived");
 // 4. 找照片、傳回來
-plan = { name: "find_files", input: { query: "疏文 印章" }, next: { name: "send_files", input: last => ({ ids: [(last.match(/\\"id\\":\\"(\w+)\\"/) || [])[1]] }) } };
+plan = { name: "find_files", input: { query: "疏文" }, next: { name: "send_files", input: last => ({ ids: [(last.match(/\\"id\\":\\"(\w+)\\"/) || [])[1]] }) } };
 ms = await say(P, "U_ben", "找疏文蓋章的照片"); plan = null;
 const img = ms.find(m => m.type === "image");
 t(img && /\/api\/line\/file\?id=\w+&s=\w+/.test(img.originalContentUrl), "photo sent back " + JSON.stringify(ms).slice(0, 300));
