@@ -61,3 +61,10 @@ CREATE TABLE IF NOT EXISTS line_files (
 CREATE INDEX IF NOT EXISTS line_files_chat ON line_files(chat_id, ts);
 CREATE TABLE IF NOT EXISTS line_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, text TEXT NOT NULL, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS line_notes_chat ON line_notes(chat_id, ts);
+
+-- 疏文人員管理（lib/staffing.js）：法會行事曆、排班、工作表現
+CREATE TABLE IF NOT EXISTS line_rites (date TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, updated INTEGER, PRIMARY KEY (date, name));
+CREATE TABLE IF NOT EXISTS line_shifts (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, date TEXT NOT NULL, person TEXT NOT NULL, role TEXT NOT NULL, start TEXT, end TEXT, note TEXT, status TEXT NOT NULL DEFAULT 'ok', batch TEXT, by TEXT, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS line_shifts_chat ON line_shifts(chat_id, date);
+CREATE TABLE IF NOT EXISTS line_perf (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, date TEXT NOT NULL, person TEXT NOT NULL, per_hour REAL, errors INTEGER, total INTEGER, hours REAL, note TEXT, status TEXT NOT NULL DEFAULT 'ok', batch TEXT, by TEXT, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS line_perf_chat ON line_perf(chat_id, date);

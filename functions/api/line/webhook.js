@@ -11,6 +11,7 @@ import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
 import { adminFor, decisionCard, newDecision, toAdmin, watchAdmin } from "../../../lib/escalate.js";
 import { normStore, facts, sampleCard } from "../../../lib/billstats.js";
 import { isPrivate, archive, savedText, fileMessages } from "../../../lib/vault.js";
+import { staffOn, watchStaff, rosterCard, perfCard } from "../../../lib/staffing.js";
 import { setOwner } from "../../bo/index.js";
 import { handleMiao } from "../../../lib/miao.js";
 import { isAudioName, transcribe, saveTranscript, recordTranscribe, budgetLeft, findTranscripts, MAX_AUDIO } from "../../../lib/audio.js";
@@ -191,6 +192,10 @@ async function handle(env, ev, origin) {
   if (group && !who.optout && !(command && /^(不要記錄我|恢復記錄|清除紀錄)$/.test(command))) await record(db, chatId, userId, who.name, raw);
   if (group) await vendorReply(env, db, line, chatId, userId, who.name, text).catch(e => console.log("vendor reply", e.message));
   // 沒叫小幫手、但說了自己要做的事（「我明天交報價」）：私訊問他要不要加成待辦
+  // 疏文人員管理群：排班、工作表現不用 @，看懂就記下來並貼排班卡
+  const staff = group && (await staffOn(db, chatId));
+  const staffCmd = /^(排班|排班表|班表|人員安排|人手|排班卡|表現|表現統計|工作表現|績效|蓋章表現|法會|法會行程|法會日期|近期法會|(開啟|啟用|關閉|停用)人員管理)$/.test(text.replace(/[。！!～~\s]+$/g, ""));
+  if (staff && !who.optout && command === null && !staffCmd) { if (await watchStaff(env, db, line, { chatId, userId, name: who.name, text: raw.replace(/[@＠]\s?小幫手/g, "").trim(), replyToken: ev.replyToken, ts: ev.timestamp || Date.now() }).catch(e => { console.log("watchStaff", e.message); return false; })) return; }
   if (group && !addressed && !who.optout) await watchCommit(env, db, line, { chatId, userId, name: who.name, text: raw, replyToken: ev.replyToken, chatName: await kv.get(db, "name:" + chatId) }).catch(e => console.log("watchCommit", e.message));
   if (!addressed) return;
 
@@ -257,6 +262,19 @@ async function handle(env, ev, origin) {
 
   // ---- 拆帳 ----（「賬」「单」也算；說法放寬：啟動／開始／啟用、幫我拆帳…）
   const sc = c.replace(/賬/g, "帳").replace(/单/g, "單").replace(/[。！!～~\s]+$/g, "").replace(/^(請|幫我|麻煩)?/, "");
+  // ---- 疏文人員管理 ----
+  if (group && /^(開啟|啟用|關閉|停用)人員管理$/.test(sc)) {
+    if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能設定。");
+    if (/關閉|停用/.test(sc)) { await db.prepare("DELETE FROM line_kv WHERE k=?").bind("staff:on:" + chatId).run(); return reply("好，這裡不再自動記排班和表現。"); }
+    await kv.set(db, "staff:on:" + chatId, "1");
+    return reply("好，這裡開始管人員：大家貼排班、貼工作表現不用 @我，我會自動記下來、貼排班卡；說「排班」「表現統計」「法會」隨時看。");
+  }
+  if (staff && /^(排班|排班表|班表|人員安排|人手|排班卡)$/.test(sc)) return line.reply(ev.replyToken, [await rosterCard(db, chatId)]).catch(e => console.log("roster", e.message));
+  if (staff && /^(表現|表現統計|工作表現|績效|蓋章表現)$/.test(sc)) return line.reply(ev.replyToken, [await perfCard(db, chatId)]).catch(e => console.log("perf", e.message));
+  if (staff && /^(法會|法會行程|法會日期|近期法會)$/.test(sc)) {
+    const { results } = await db.prepare("SELECT date,name,kind FROM line_rites WHERE date>=? ORDER BY date LIMIT 12").bind(new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)).all();
+    return reply(results.length ? "近期法會：\n" + results.map(r => `・${+r.date.slice(5, 7)}/${+r.date.slice(8)} ${r.name}${r.kind === "yaya" ? "（做牙：前 1 天 2 位蓋章）" : "（前 3 天每天 3–5 位蓋章，當天 1–2 位現場）"}`).join("\n") : "還沒有法會資料，我每天早上會去官網更新一次。");
+  }
   // ---- 私人助理群：只有管理員能設定 ----
   if (group && /^(設成|設為|變成|開啟|取消|關閉)?私人助理群$/.test(sc)) {
     if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能設定。");
