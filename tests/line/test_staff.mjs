@@ -145,4 +145,19 @@ calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 6)); t(!calls.some(c =
   t(r2.hours === 7 && r2.per_hour === 96 && r2.errors === 20 && /改好了 陳汶琪：7 小時共 669 張/.test(js(ms)) && ms.length === 1, "perf fixed " + js(r2) + js(ms));
   extract = null;
 }
+// 每次表現都記一筆；當天累計的扣掉之前的；回覆跟上一次比；個人紀錄卡看進步退步
+{
+  sq.prepare("DELETE FROM line_perf").run();
+  extract = { perf: [{ date: today, person: "王小華", total: 175, hours: 1.5, errors: 5 }] };
+  ms = await say("U_q", "王小華-90分鐘175張 出錯5張");
+  t(/第一次記錄/.test(js(ms)), "first record " + js(ms));
+  extract = { perf: [{ date: today, person: "王小華", total: 669, hours: 6.5, errors: 20, cumulative: true }] };
+  ms = await say("U_q", "王小華-6小時30分鐘669張 出錯20張");
+  const segs = sq.prepare("SELECT total,hours,errors,per_hour,note FROM line_perf WHERE person='王小華' AND status='ok' ORDER BY id").all();
+  t(segs.length === 2 && segs[1].total === 494 && segs[1].hours === 5 && segs[1].errors === 15 && segs[1].per_hour === 99 && /當天累計/.test(segs[1].note), "cumulative split into segment " + js(segs));
+  t(/這一段 王小華：5 小時共 494 張/.test(js(ms)) && /今天累計 6 小時 30 分鐘 669 張/.test(js(ms)) && /比上次：速度 ↓ 每小時少 18 張/.test(js(ms)), "reply shows segment + trend " + js(ms));
+  const pc = JSON.stringify(await S.personCard(db, G, "小華"));
+  t(/王小華 的表現紀錄/.test(pc) && /第 2 次/.test(pc) && /117 → 99/.test(pc), "person card " + pc.slice(0, 300));
+  extract = null;
+}
 console.log(`${ok} passed, ${bad} failed`);
