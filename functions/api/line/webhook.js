@@ -423,7 +423,12 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
 
 /* 提醒卡或待辦清單上按「✓ 已完成」：負責人、交辦的人或管理員按了就劃掉，之後不再提醒 */
 async function doneByButton(db, line, chatId, userId, id) {
-  const t = await db.prepare("SELECT * FROM line_todos WHERE id=? AND chat_id=?").bind(id, chatId).first();
+  let t = await db.prepare("SELECT * FROM line_todos WHERE id=? AND chat_id=?").bind(id, chatId).first();
+  // 提醒被搬到別的聊天室（例如私訊的待辦提醒搬到私人助理群）：本人或管理員按的，照樣找得到
+  if (!t && (await db.prepare("SELECT 1 FROM line_reminders WHERE todo_id=? AND chat_id=? LIMIT 1").bind(id, chatId).first())) {
+    const o = await db.prepare("SELECT * FROM line_todos WHERE id=?").bind(id).first();
+    if (o && (o.created_by === userId || o.assignee_id === userId || (await isAdmin(db, userId)))) t = o;
+  }
   if (!t) return "找不到這件待辦，可能已經刪掉了。";
   if (t.status !== "open") return `這件已經完成了：${t.task}`;
   if (t.assignee_id && t.assignee_id !== userId && t.created_by !== userId && !(await isAdmin(db, userId)))

@@ -62,4 +62,9 @@ const body2 = JSON.stringify({ events: [{ type: "postback", webhookEventId: "x9"
 calls.length = 0;
 await wh.onRequestPost({ request: new Request("https://x/api/line/webhook", { method: "POST", body: body2, headers: { "x-line-signature": createHmac("sha256", "s").update(body2).digest("base64") } }), env });
 t(sq.prepare("SELECT status FROM line_todos WHERE id='ef56'").get().status === "open", "cross-group blocked");
+// 私訊的待辦、提醒被搬到別的群組：在那個群組按「已完成」，本人照樣能劃掉
+ins("INSERT INTO line_todos(id,chat_id,task,assignee_id,assignee_name,due,status,created,created_by) VALUES('9a9a','U_boss',?,NULL,'Boss',?,'open',?,'U_boss')", "整理發票", now - 864e5, now);
+ins("INSERT INTO line_reminders VALUES('r9',?,?,?,'none',NULL,NULL,'9a9a',?,'U_boss','sent',NULL)", G, now - 60e3, "逾期還沒完成：整理發票", now);
+r = await post("U_boss", "done:9a9a");
+t(/完成了：整理發票/.test(r) && sq.prepare("SELECT status FROM line_todos WHERE id='9a9a'").get().status === "done", "moved reminder can be completed: " + r);
 console.log(`${ok} passed, ${bad} failed`);
