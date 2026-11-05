@@ -124,4 +124,25 @@ calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 6)); t(!calls.some(c =
   const bs = JSON.parse(card).contents.contents;
   t(!/其他排班/.test(card) && JSON.stringify(bs.find(b => /乙做牙/.test(JSON.stringify(b)))).includes("邱姝怡") && /這天也要蓋章/.test(JSON.stringify(bs.find(b => /甲法會/.test(JSON.stringify(b))))), "card puts stamp under next rite " + card.slice(0, 200));
 }
+// 表現回覆寫清楚：總張數、每小時、總共錯幾張、錯誤率；用聊天的模型，不用最便宜的
+{
+  extract = { perf: [{ date: today, person: "陳汶琪", total: 669, hours: 6.5, errors: 20 }] };
+  ms = await say("U_q", "陳汶琪-6小時30分鐘669張  出錯率20張");
+  t(/陳汶琪：6 小時 30 分鐘共 669 張，平均每小時 103 張，總共錯 20 張（錯誤率 3.0%）/.test(js(ms)) && ms.length === 1, "perf line clear " + js(ms));
+  t(/sonnet/.test(claudeBodies.find(b => /排班秘書/.test(JSON.stringify(b.system))).model), "staff uses chat model");
+  const pid = sq.prepare("SELECT id FROM line_perf WHERE person='陳汶琪' ORDER BY id DESC").get().id;
+  // 回覆小幫手更正：看得到被回覆的那句、最近的紀錄；本來就記對 → 只說明，不撤回、不貼排班卡
+  sq.prepare("INSERT INTO line_kv VALUES('sent:bot1',?)").run(JSON.stringify({ t: "記下了～ 陳汶琪 表現：每小時 103 張，錯 20 張", ts: Date.now() }));
+  extract = { reply: "錯 20 張是整段的總數，錯誤率 3.0%，已經這樣記了。" };
+  ms = await send({ type: "message", source: { type: "group", groupId: G, userId: "U_ben" }, message: { type: "text", id: "mq1", text: "20張應該是總共的錯誤數，不是每小時", quotedMessageId: "bot1" } });
+  const sb = claudeBodies.find(b => /排班秘書/.test(JSON.stringify(b.system)));
+  t(sb && /回覆小幫手的這句/.test(JSON.stringify(sb.messages)) && new RegExp("#" + pid + " ").test(JSON.stringify(sb.system)), "correction sees quote + perf ids");
+  t(ms.length === 1 && /整段的總數/.test(js(ms)) && sq.prepare("SELECT status FROM line_perf WHERE id=?").get(pid).status === "ok", "explain only, no undo, no roster " + js(ms));
+  // 真的要改：perf_fix 只改那筆
+  extract = { perf_fix: [{ id: pid, hours: 7 }] };
+  ms = await send({ type: "message", source: { type: "group", groupId: G, userId: "U_ben" }, message: { type: "text", id: "mq2", text: "應該是7小時", quotedMessageId: "bot1" } });
+  const r2 = sq.prepare("SELECT hours,per_hour,errors,status FROM line_perf WHERE id=?").get(pid);
+  t(r2.hours === 7 && r2.per_hour === 96 && r2.errors === 20 && /改好了 陳汶琪：7 小時共 669 張/.test(js(ms)) && ms.length === 1, "perf fixed " + js(r2) + js(ms));
+  extract = null;
+}
 console.log(`${ok} passed, ${bad} failed`);

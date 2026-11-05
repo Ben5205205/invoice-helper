@@ -190,7 +190,7 @@ async function handle(env, ev, origin) {
   // 疏文人員管理群：排班、工作表現不用 @，看懂就記下來並貼排班卡
   const staff = group && (await staffOn(db, chatId));
   const staffCmd = /^(開啟|啟用|關閉|停用)人員管理$/.test(text.replace(/[。！!～~\s]+$/g, ""));
-  if (staff && !who.optout && command === null && !staffCmd) { if (await watchStaff(env, db, line, { chatId, userId, name: who.name, text: raw.replace(/[@＠]\s?小幫手/g, "").trim(), replyToken: ev.replyToken, ts: ev.timestamp || Date.now() }).catch(e => { console.log("watchStaff", e.message); return false; })) return; }
+  if (staff && !who.optout && command === null && !staffCmd) { if (await watchStaff(env, db, line, { chatId, userId, name: who.name, text: raw.replace(/[@＠]\s?小幫手/g, "").trim(), replyToken: ev.replyToken, ts: ev.timestamp || Date.now(), quotedId: msg.quotedMessageId || null }).catch(e => { console.log("watchStaff", e.message); return false; })) return; }
   if (group && !addressed && !who.optout) await watchCommit(env, db, line, { chatId, userId, name: who.name, text: raw, replyToken: ev.replyToken, chatName: await kv.get(db, "name:" + chatId) }).catch(e => console.log("watchCommit", e.message));
   if (!addressed) return;
 
