@@ -12,6 +12,7 @@ import { adminFor, decisionCard, newDecision, toAdmin, watchAdmin } from "../../
 import { normStore, facts, sampleCard } from "../../../lib/billstats.js";
 import { isPrivate, archive, addPending, saveCmd, savePending, fileMessages } from "../../../lib/vault.js";
 import { staffOn, watchStaff } from "../../../lib/staffing.js";
+import { rosterOn, sheetLink, startRoster, goRoster } from "../../../lib/roster.js";
 import { setOwner } from "../../bo/index.js";
 import { handleMiao } from "../../../lib/miao.js";
 import { isAudioName, transcribe, saveTranscript, recordTranscribe, budgetLeft, findTranscripts, MAX_AUDIO } from "../../../lib/audio.js";
@@ -102,6 +103,13 @@ async function handle(env, ev, origin) {
       if (d === "split:no") return;
       const gp = d.match(/^grp:(\w+):([CR]\w+)$/);
       if (gp) return reply(await applyGroupPick(env, db, { pid: gp[1], groupId: gp[2], userId, isAdmin: await isAdmin(db, userId) }));
+      // 名冊確認卡：確定製作／取消（只有管理員）
+      const ro = d.match(/^roster:(go|no):(\w+)$/);
+      if (ro) {
+        if (!(await isAdmin(db, userId))) return reply("名冊只有 Ben 能確定。");
+        if (ro[1] === "no") { await db.prepare("UPDATE line_roster_jobs SET status='cancelled', updated=? WHERE id=? AND chat_id=? AND status='draft'").bind(Date.now(), ro[2], chatId).run(); return reply("好，這份名冊取消。"); }
+        return reply(await goRoster(env, db, { chatId, id: ro[2] }));
+      }
       const ad = d.match(/^adm:(ok|all|no):(\w+)$/);
       if (ad) return reply(await adminDecision(env, db, line, chatId, userId, ad[2], ad[1]));
       const tr = d.match(/^txr:(yes|no):(\w+)$/);
@@ -191,6 +199,14 @@ async function handle(env, ev, origin) {
   const staff = group && (await staffOn(db, chatId));
   const staffCmd = /^(開啟|啟用|關閉|停用)人員管理$/.test(text.replace(/[。！!～~\s]+$/g, ""));
   if (staff && !who.optout && command === null && !staffCmd) { if (await watchStaff(env, db, line, { chatId, userId, name: who.name, text: raw.replace(/[@＠]\s?小幫手/g, "").trim(), replyToken: ev.replyToken, ts: ev.timestamp || Date.now(), quotedId: msg.quotedMessageId || null }).catch(e => { console.log("watchStaff", e.message); return false; })) return; }
+  // 疏文法會名冊：開了名冊的群組，Ben 貼試算表連結（或回覆確認卡修改）不用 @
+  if (group && command === null && (await rosterOn(db, chatId)) && (await isAdmin(db, userId))) {
+    const link = sheetLink(raw), qj = msg.quotedMessageId ? await kv.get(db, "roster:card:" + msg.quotedMessageId) : null;
+    if (link || qj) {
+      await line.loading(chatId, 60).catch(() => {});
+      return startRoster(env, db, line, { chatId, userId, text: raw.replace(/https?:\/\/\S+/g, "").replace(/[@＠]\s?小幫手/g, "").trim(), link, replyToken: ev.replyToken, quotedJob: link ? null : qj });
+    }
+  }
   if (group && !addressed && !who.optout) await watchCommit(env, db, line, { chatId, userId, name: who.name, text: raw, replyToken: ev.replyToken, chatName: await kv.get(db, "name:" + chatId) }).catch(e => console.log("watchCommit", e.message));
   if (!addressed) return;
 
@@ -263,6 +279,13 @@ async function handle(env, ev, origin) {
     if (/關閉|停用/.test(sc)) { await db.prepare("DELETE FROM line_kv WHERE k=?").bind("staff:on:" + chatId).run(); return reply("好，這裡不再自動記排班和表現。"); }
     await kv.set(db, "staff:on:" + chatId, "1");
     return reply("好，這裡開始管人員：大家貼排班、貼工作表現不用 @我，我會自動記下來、貼排班卡；說「排班」「表現統計」「法會」隨時看。");
+  }
+  // ---- 疏文法會名冊：開啟／關閉（只有管理員） ----
+  if (group && /^(開啟|啟用|關閉|停用)名冊(功能)?$/.test(sc)) {
+    if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能設定。");
+    if (/關閉|停用/.test(sc)) { await db.prepare("DELETE FROM line_kv WHERE k=?").bind("roster:on:" + chatId).run(); return reply("好，這裡不再做名冊。"); }
+    await kv.set(db, "roster:on:" + chatId, "1");
+    return reply("好，這裡可以做名冊了：Ben 貼試算表連結（要哪一頁就貼那一頁的連結），再交代一句，例如「刪掉王小明，分五份，第一份多 30」，不用 @我。我會先貼確認卡，按「確定製作」才開始排版。");
   }
   // ---- 私人助理群：只有管理員能設定 ----
   if (group && /^(設成|設為|變成|開啟|取消|關閉)?私人助理群$/.test(sc)) {

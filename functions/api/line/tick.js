@@ -7,6 +7,7 @@ import { runFlows } from "../../../lib/orders.js";
 import { buildDigests } from "../../../lib/digest.js";
 import { cleanupTranscripts } from "../../../lib/audio.js";
 import { pendingCards } from "../../../lib/split.js";
+import { rosterTick } from "../../../lib/roster.js";
 import { staffTick } from "../../../lib/staffing.js";
 import { kv, nextDue, ymd, hm, md, parseLocal, isGroup, KEEP_DAYS } from "../../../lib/assistant.js";
 
@@ -70,6 +71,7 @@ export async function onRequestPost({ request, env }) {
 
   // 每天清一次 30 天前記住的小幫手訊息
   if (new Date(now + 8 * 3600e3).getUTCHours() === 4 && new Date(now).getUTCMinutes() < 2) await db.prepare("DELETE FROM line_kv WHERE k LIKE 'sent:%' AND json_extract(v,'$.ts') < ?").bind(now - 30 * 864e5).run().catch(e => console.log("sent cleanup", e.message));
+  try { const n = await rosterTick(env, db, line, now); if (n) sent.roster = n; } catch (e) { console.log("roster tick", e.message); }
   // 疏文人員管理：前一天 18:00 班表、09:00 缺人提醒、06:00 更新法會行事曆
   try { const n = await staffTick(env, db, line, now); if (n) sent.staff = n; } catch (e) { console.log("staff tick", e.message); }
   // 拆帳送出 10 分鐘還沒人按「貼出請款單」：推播請款卡（備援）

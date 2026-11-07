@@ -9,6 +9,7 @@ try {
   API_.createLog = createLog_;
   API_.readFile = readFile_;
   API_.saveFile = saveFile_;
+  API_.readTab = readTab_;
 } catch (e) { Logger.log('請把這個檔案拖到「程式碼」下面'); }
 
 function subFolder_(name) {
@@ -115,6 +116,16 @@ function saveFile_(name, mime, b64, path) {
   var blob = Utilities.newBlob(Utilities.base64Decode(b64), mime || 'application/octet-stream', String(name || '檔案').slice(0, 200));
   var f = folder.createFile(blob);
   return { id: f.getId(), url: f.getUrl(), name: f.getName() };
+}
+
+/* 疏文法會名冊：讀試算表的某一頁（gid；沒給就第一頁），整頁的值 */
+function readTab_(id, gid) {
+  var ss;
+  try { ss = SpreadsheetApp.openById(String(id)); } catch (e) { throw new Error('NO_ACCESS'); }
+  var sh = ss.getSheets().filter(function (s) { return gid == null || gid === '' || String(s.getSheetId()) === String(gid); })[0];
+  if (!sh) throw new Error('找不到這一頁');
+  var r = Math.min(sh.getLastRow(), 6000), c = Math.min(sh.getLastColumn(), 200);
+  return { title: ss.getName(), name: sh.getName(), rows: r && c ? sh.getRange(1, 1, r, c).getDisplayValues() : [] };
 }
 
 /* 第一次貼上後執行一次，讓 Google 要求「建立文件」的權限 */
