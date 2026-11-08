@@ -1,6 +1,6 @@
 // GET /split?t=<群組代碼>[&id=<帳單>] — 拆帳紀錄網頁（只有拿到群組連結的人打得開）
 import { kv } from "../../lib/assistant.js";
-import { compute, fmt, combine } from "../../lib/split.js";
+import { compute, fmt, combine, storeColor, storeColors } from "../../lib/split.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const tw = ms => { const t = new Date(ms + 8 * 3600e3); return `${t.getUTCFullYear()}/${t.getUTCMonth() + 1}/${t.getUTCDate()}`; };
@@ -28,7 +28,7 @@ export async function onRequestGet({ request, env }) {
   const sum = results.filter(r => r.status === "done").reduce((a, r) => a + (JSON.parse(r.result || "{}").total || 0), 0);
   const list = results.map(r => {
     const d = JSON.parse(r.data || "{}"), res = r.result ? JSON.parse(r.result) : null;
-    return `<a class="bill" href="?t=${esc(t)}&id=${esc(r.id)}">
+    return `<a class="bill" style="border-left:5px solid ${storeColor(d.store).base}" href="?t=${esc(t)}&id=${esc(r.id)}">
       <div class="bill-top"><div><div class="store">${esc(d.store || "帳單")}</div><div class="meta">${esc(d.date || tw(r.created))}${d.bill_no ? "｜" + esc(d.bill_no) : ""}</div></div>
       <div class="amt">$${fmt(res ? res.total : d.cash)}</div></div>
       ${res ? `<div class="chips">${res.payers.map(p => `<span class="chip">${esc(p.name)} <b>$${fmt(p.total)}</b></span>`).join("")}</div>` : `<div class="chips"><span class="chip pending">拆帳中</span></div>`}
@@ -64,7 +64,7 @@ function detail(r, t, focus) {
   const shared = (d.shared || []).map(s => `<tr><td>${esc(s.name)}${s.qty > 1 ? `<small>${s.qty} × ${fmt(s.price)}</small>` : ""}</td><td>${s.who ? s.who.map(nm).join("、") : "全部平分"}</td><td class="num">${fmt(s.amount)}</td></tr>`).join("");
   const photos = [0, 1, 2, 3].map(n => `<a href="/split/img?t=${esc(t)}&id=${esc(r.id)}&n=${n}" target="_blank" class="ph" data-n="${n}"><img loading="lazy" src="/split/img?t=${esc(t)}&id=${esc(r.id)}&n=${n}" alt="帳單照片" onerror="this.parentNode.remove()"></a>`).join("");
   return `
-    <header class="hero"><a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>
+    <header class="hero" style="background:${storeColor(d.store).base}"><a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>
       <div class="kicker">${r.status === "done" ? "請款單" : "拆帳中"}</div><h1>${esc(d.store || "帳單")}</h1>
       <div class="meta light">${esc(d.date || tw(r.created))}${d.bill_no ? "｜單號 " + esc(d.bill_no) : ""}</div>
       <div class="total"><span>現金總額</span><b>$${fmt(d.cash)}</b></div>${d.card ? `<div class="meta light">刷卡價格 $${fmt(d.card)}</div>` : ""}${d.payee ? `<div class="payto">請轉給 <b>${esc(d.payee)}</b></div>` : ""}</header>
@@ -79,7 +79,7 @@ function detail(r, t, focus) {
 }
 
 function combinedPage(bills, t, focus) {
-  const c = combine(bills);
+  const c = combine(bills), pal = storeColors(bills.map(b => b.d.store || "帳單")), storeColor = n => pal[n || "帳單"] || pal[n];
   const people = c.people.map(p => {
     const vip = c.top !== null && p.total === c.top && c.top > 0;
     const stores = p.stores.map(s => {
@@ -89,7 +89,8 @@ function combinedPage(bills, t, focus) {
       const items = mine.flatMap(x => x.items.map(i => ({ ...i, who: x.name !== p.name ? x.name : "" })));
       const hi = items.filter(i => i.name.startsWith("小姐｜")), si = items.filter(i => !i.name.startsWith("小姐｜"));
       const li = arr => arr.map(i => `<li><span>${esc(i.name.replace(/^小姐｜/, ""))}${i.who ? `<em>${esc(i.who)}</em>` : ""}</span><span>${fmt(i.amount)}</span></li>`).join("");
-      return `<li class="store"><span>${esc(s.store)}<a href="?t=${esc(t)}&id=${esc(s.id)}">整張 ›</a></span><span>${fmt(s.total)}</span></li>
+      const sc = storeColor(s.store);
+      return `<li class="store" style="color:${sc.base};background:${sc.tint};border-left:4px solid ${sc.base}"><span>${esc(s.store)}<a href="?t=${esc(t)}&id=${esc(s.id)}">整張 ›</a></span><span>${fmt(s.total)}</span></li>
         ${hi.length ? `<li class="grp"><span>小姐</span><span>${fmt(s.hostess)}</span></li>${li(hi)}` : ""}
         ${si.length ? `<li class="grp"><span>公帳分攤</span><span>${fmt(s.shared)}</span></li>${li(si)}` : ""}`;
     }).join("");
@@ -98,7 +99,7 @@ function combinedPage(bills, t, focus) {
   return `
     <header class="hero"><a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>
       <div class="kicker">合併請款單（${bills.length} 張）</div><h1>${bills.map(b => esc(b.d.store || "帳單")).join("＋")}</h1>
-      ${bills.map(b => `<div class="meta light">${esc(b.d.store || "帳單")}　$${fmt(b.res.total)}</div>`).join("")}
+      <div class="storechips">${bills.map(b => { const sc = storeColor(b.d.store); return `<span style="background:${sc.tint};color:${sc.base}">${esc(b.d.store || "帳單")} $${fmt(b.res.total)}</span>`; }).join("")}</div>
       <div class="total"><span>合計</span><b>$${fmt(c.total)}</b></div></header>
     <main><h2>每個人（點開看每家店）</h2><section class="card people">${people}</section></main>`;
 }
@@ -129,7 +130,7 @@ main{max-width:640px;margin:0 auto;padding:6px 16px 40px}h2{font-size:13px;color
 details{border-bottom:1px solid var(--line)}details:last-child{border:0}summary{display:flex;justify-content:space-between;padding:13px 0;cursor:pointer;list-style:none;font-weight:600}
 summary::-webkit-details-marker{display:none}summary em{font-style:normal;font-size:12px;color:var(--sub);margin-left:6px;font-weight:400}
 details ul{list-style:none;margin:0 0 12px;padding:0}details li{display:flex;justify-content:space-between;font-size:13.5px;color:var(--sub);padding:3px 0 3px 12px;gap:10px;font-variant-numeric:tabular-nums}
-details li.store{padding:12px 0 2px;color:var(--brand);font-weight:700;font-size:14px;border-top:1px dashed var(--line);margin-top:4px}details li.store a{margin-left:8px;font-size:12px;color:var(--accent);text-decoration:none;font-weight:600}details li em{font-style:normal;font-size:11px;color:var(--accent);margin-left:6px}summary .badge{font-style:normal;margin-right:6px;font-size:10.5px;padding:1px 8px;vertical-align:1px}details li.grp{padding:8px 0 2px;color:var(--ink);font-weight:600;font-size:13px}details.focus{background:var(--soft);margin:0 -16px;padding:0 16px;border-radius:12px}
+details li.store{padding:7px 10px;font-weight:700;font-size:14px;margin:10px 0 2px;border-radius:8px}.storechips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.storechips span{border-radius:999px;padding:3px 11px;font-size:13px;font-weight:700}details li.store a{margin-left:8px;font-size:12px;color:var(--accent);text-decoration:none;font-weight:600}details li em{font-style:normal;font-size:11px;color:var(--accent);margin-left:6px}summary .badge{font-style:normal;margin-right:6px;font-size:10.5px;padding:1px 8px;vertical-align:1px}details li.grp{padding:8px 0 2px;color:var(--ink);font-weight:600;font-size:13px}details.focus{background:var(--soft);margin:0 -16px;padding:0 16px;border-radius:12px}
 table{width:100%;border-collapse:collapse;font-size:14px}th{font-size:12px;color:var(--sub);font-weight:500;text-align:left;padding:10px 0 6px}
 td{padding:10px 8px 10px 0;border-top:1px solid var(--line);vertical-align:top}.num{text-align:right;padding-right:0;font-variant-numeric:tabular-nums;white-space:nowrap}
 td small{display:inline-block;margin-left:6px;font-size:11px;color:var(--sub)}.lines{font-size:11.5px;color:var(--sub);margin-top:2px}

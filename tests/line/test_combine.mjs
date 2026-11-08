@@ -43,5 +43,7 @@ t(!(await S.combinedMessages(db, r2)).length, "far apart = separate");
 sq.prepare("UPDATE line_splits SET created=? WHERE id='b1'").run(now - 15 * 60e3);
 const page = await import(R + "/functions/split/index.js");
 const html = await (await page.onRequestGet({ request: new Request("https://x.dev/split?t=abcdefghijklmnopqrstuvwx&ids=b1,b2&p=" + encodeURIComponent("王小明")), env: { DB: db } })).text();
-t(/合併請款單（2 張）/.test(html) && /id="p-王小明" open/.test(html) && /class="store"><span>香閣/.test(html) && /class="store"><span>世盟/.test(html) && /林志明/.test(html) && /公帳分攤/.test(html), "combined page");
+t(/合併請款單（2 張）/.test(html) && /id="p-王小明" open/.test(html) && /class="store"[^>]*><span>香閣/.test(html) && /class="store"[^>]*><span>世盟/.test(html) && /林志明/.test(html) && /公帳分攤/.test(html), "combined page");
+// 每家店不同顏色（同一批不重複）
+{ const S2 = await import(R + "/lib/split.js"); const pal = S2.storeColors(["SS", "金錢豹", "世盟"]); t(new Set(Object.values(pal).map(x => x.base)).size === 3, "distinct store colors"); }
 console.log(`${ok} passed, ${bad} failed`);
