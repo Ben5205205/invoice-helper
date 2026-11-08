@@ -15,6 +15,7 @@ import { staffOn, watchStaff } from "../../../lib/staffing.js";
 import { rosterOn, sheetLink, startRoster, goRoster } from "../../../lib/roster.js";
 import { callsName, stripName, isForBot, buildProfile } from "../../../lib/address.js";
 import { storeListText } from "../../../lib/stores.js";
+import { rankCmd, rankMessages } from "../../../lib/guests.js";
 import { setOwner } from "../../bo/index.js";
 import { handleMiao } from "../../../lib/miao.js";
 import { isAudioName, transcribe, saveTranscript, recordTranscribe, budgetLeft, findTranscripts, MAX_AUDIO } from "../../../lib/audio.js";
@@ -233,6 +234,7 @@ async function handle(env, ev, origin) {
   if (/^(說明|help|怎麼用|使用說明|你會什麼|你會做什麼|功能|\?|？)$/i.test(c))
     return ev.replyToken ? line.reply(ev.replyToken, [helpCard(group, { keepDays: KEEP_DAYS, split: group && (await splitOn(db, chatId)) })]).catch(() => reply(group ? HELP_GROUP : HELP_USER)) : null;
   if (/^(店家(清單|列表|資料)|所有店家|有哪些店[?？]?)$/.test(c)) return reply(await storeListText(db));
+  if (rankCmd(c) && ev.replyToken) return line.reply(ev.replyToken, await rankMessages(db, { chatId, all: !group && (await isAdmin(db, userId)), which: rankCmd(c) })).catch(e => console.log("rank", e.message));
   if (/^(待辦(清單|事項)?|有哪些待辦[?？]?)$/.test(c)) return reply(await todoText(db, chatId), await todoChips(db, chatId));
   if (/^完成\s*[0-9a-f]{4}/i.test(c)) return reply(await completeByText(db, chatId, c));
   if (group && /^(請)?(不要|別|停止)(再)?(記錄|紀錄)我(的訊息)?$/.test(c)) {
