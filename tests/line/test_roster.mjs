@@ -53,6 +53,7 @@ const ord = RO.defaultOrder(["NB-月繳", "NK", "J", "福田︱尊榮富足大�
 t(js(ord) === js(["福田︱尊榮富足大老闆", "NK", "NB-月繳", "J"]), "default order " + js(ord));
 const ap = RO.applyConfig(plans, { order: ord, remove: [{ name: "胡靖韋", plan: "" }, { name: "不存在", plan: "" }] });
 t(ap.plans[0].names.join() === "劉雅菱,曾寶儀" && ap.plans[3].names.join() === "林一,張三" && ap.missing.join() === "不存在", "apply " + js(ap));
+sq.prepare("INSERT INTO line_kv VALUES(?, '1')").run("staff:on:" + G);   // 名冊群組同時也是疏文人員群組
 // 3. 沒開名冊的群組貼連結不理
 const link = "https://docs.google.com/spreadsheets/d/1lPglD_WsRwb_quNhDmgGyY32SA6uo1-xZs7PxClu6HU/edit?gid=2120649206#gid=2120649206";
 t(!(await say("U_ben", link)).length, "off by default");
@@ -62,6 +63,7 @@ t(/可以做名冊/.test(js(await say("U_ben", "@小幫手 開啟名冊", { ment
 aiOut = { title: "11-08名冊", order: ["福田︱尊榮富足大老闆", "NK", "NB-月繳", "J"], remove: [{ name: "胡靖韋", plan: "福田︱尊榮富足大老闆" }], split: { parts: 2, first_extra: 1, company_weight: 2 }, note: "" };
 let ms = await say("U_ben", "11/08 名冊，刪掉胡靖韋，分兩份第一份多 1 " + link);
 const rt = calls.find(c => c.body?.fn === "readTab");
+t(!calls.some(c => /排班秘書/.test(JSON.stringify(c.body?.system || ""))), "staff watcher skipped for sheet link");
 t(rt && rt.body.args[0] === "1lPglD_WsRwb_quNhDmgGyY32SA6uo1-xZs7PxClu6HU" && rt.body.args[1] === "2120649206", "reads that tab");
 t(ms[0]?.type === "flex" && /名冊確認｜11-08名冊/.test(js(ms)) && /1\. 福田︱尊榮富足大老闆/.test(js(ms)) && /刪除：胡靖韋/.test(js(ms)) && /分 2 份/.test(js(ms)), "confirm card " + js(ms).slice(0, 300));
 const job = sq.prepare("SELECT * FROM line_roster_jobs").get();
