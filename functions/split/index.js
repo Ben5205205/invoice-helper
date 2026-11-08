@@ -40,7 +40,7 @@ function detail(r, t, focus) {
     const person = res.people.find(x => x.id === p.id);
     const vip = top !== null && p.total === top && top > 0;
     return `<div class="payer${vip ? " no1" : ""}">${vip ? '<div class="badge">👑 恩客NO.1 ✨</div>' : ""}<div class="payer-top"><div class="pname">${esc(p.name)}</div><div class="pamt">$${fmt(p.total)}</div></div>
-      <div class="psub">小姐 ${fmt(person.hostess)}｜公費 ${fmt(person.shared)}</div>
+      <div class="psub">小姐 ${fmt(person.hostess)}｜公帳分攤 ${fmt(person.shared)}</div>
       ${p.includes.map(x => `<div class="inc">＋ 含 ${esc(x.name)} $${fmt(x.total)}</div>`).join("")}</div>`;
   }).join("") : "";
   // 每個人的明細：小姐、公帳分攤分開列，各有小計；從請款卡點進來的那個人（和併給他的人）直接打開、捲到那裡
