@@ -54,9 +54,11 @@ t(js(ord) === js(["福田︱尊榮富足大老闆", "NK", "NB-月繳", "J"]), "d
 const ap = RO.applyConfig(plans, { order: ord, remove: [{ name: "胡靖韋", plan: "" }, { name: "不存在", plan: "" }] });
 t(ap.plans[0].names.join() === "劉雅菱,曾寶儀" && ap.plans[3].names.join() === "林一,張三" && ap.missing.join() === "不存在", "apply " + js(ap));
 sq.prepare("INSERT INTO line_kv VALUES(?, '1')").run("staff:on:" + G);   // 名冊群組同時也是疏文人員群組
-// 3. 沒開名冊的群組貼連結不理
+// 3. 每個群組預設可以做名冊；別人貼連結不理；說「關閉名冊」就不做
 const link = "https://docs.google.com/spreadsheets/d/1lPglD_WsRwb_quNhDmgGyY32SA6uo1-xZs7PxClu6HU/edit?gid=2120649206#gid=2120649206";
-t(!(await say("U_ben", link)).length, "off by default");
+t(!/名冊確認/.test(js(await say("U_amy", link))), "non-admin link ignored");
+t(/不再做名冊/.test(js(await say("U_ben", "@小幫手 關閉名冊", { mention: { mentionees: [{ index: 0, length: 4, isSelf: true }] } }))), "disable");
+t(!(await say("U_ben", link)).length, "off after disable");
 t(/只有 Ben/.test(js(await say("U_amy", "@小幫手 開啟名冊", { mention: { mentionees: [{ index: 0, length: 4, isSelf: true }] } }))), "only admin can enable");
 t(/可以做名冊/.test(js(await say("U_ben", "@小幫手 開啟名冊", { mention: { mentionees: [{ index: 0, length: 4, isSelf: true }] } }))), "enable");
 // 4. 貼連結＋交代 → 讀那一頁、確認卡

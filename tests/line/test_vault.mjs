@@ -58,7 +58,12 @@ t(/私人助理群了/.test(txt(await say(P, "U_ben", "設成私人助理群", t
 let ms = await say(P, "U_ben", "今天四點確認信件");
 t(ms.length && claudeBodies.length && /貼身女秘書/.test(JSON.stringify(claudeBodies[0].system)) && /find_files/.test(JSON.stringify(claudeBodies[0].tools)), "no @ needed + persona + vault tools");
 ms = await say(G, "U_ben", "隨便問", true);
-t(claudeBodies.length && !/貼身女秘書/.test(JSON.stringify(claudeBodies[0].system)) && !/find_files/.test(JSON.stringify(claudeBodies[0].tools)), "no persona in work group");
+t(claudeBodies.length && !/貼身女秘書/.test(JSON.stringify(claudeBodies[0].system)) && !/find_files/.test(JSON.stringify(claudeBodies[0].tools)), "no private persona in work group");
+t(/很懂撩人/.test(JSON.stringify(claudeBodies[0].system)) && /女性：像貼心的姊妹淘/.test(JSON.stringify(claudeBodies[0].system)), "group charm persona on by default, gender-aware");
+sq.prepare("INSERT INTO line_kv VALUES(?, 'off')").run("persona:" + G);
+await say(G, "U_ben", "再問一次", true);
+t(!/很懂撩人/.test(JSON.stringify(claudeBodies[0].system)), "persona off per group");
+sq.prepare("DELETE FROM line_kv WHERE k=?").run("persona:" + G);
 ms = await say(G, "U_ben", "沒叫它");
 t(!ms.length, "work group still needs @");
 // 3. 照片先不存、不回；說「存 標題」才存進同名資料夾，不用 AI 看照片

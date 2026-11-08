@@ -25,6 +25,10 @@ const DM_CLOSED = "小幫手目前只在工作群組裡使用，私訊不開放�
 const GROUP_CHIPS = [];
 const USER_CHIPS = [];
 
+const JOIN_GREETS = ["大家好～我是小幫手，今天起就在這裡陪大家了 😊 有事 @我 一聲就好。", "嗨大家✨ 小幫手報到～有需要的時候叫我，我隨傳隨到。", "各位好～我是小幫手，很開心加入大家 😊 有事喊我一聲就好。"];
+const WELCOME_GREETS = ["歡迎歡迎～我是小幫手 😊 有事 @我 就好。", "歡迎加入✨ 我是小幫手，需要幫忙隨時叫我。", "新朋友好～我是小幫手，有事喊我一聲 😊"];
+const pickGreet = list => list[Math.floor(Math.random() * list.length)];
+
 export async function onRequestPost({ request, env, waitUntil }) {
   const body = await request.text();
   // 兩個帳號共用這個入口：簽章對得上小幫手就是小幫手，對得上拆帳喵（/api/line/miao 也指到這裡）就是拆帳喵
@@ -82,10 +86,11 @@ async function handle(env, ev, origin) {
       }
       const n = await line.groupName(chatId);
       if (n) await kv.set(db, "name:" + chatId, n);
-      return ev.replyToken ? line.reply(ev.replyToken, [helpCard(true, { keepDays: KEEP_DAYS, join: true })]).catch(e => { console.log("join card failed", e.message); return reply(JOIN_NOTICE); }) : null;
+      // 進群組只打招呼，不介紹功能
+      return ev.replyToken ? reply(pickGreet(JOIN_GREETS)) : null;
     }
     case "leave": return forgetChat(db, chatId);
-    case "memberJoined": return reply(`歡迎！我是小幫手，有事 @小幫手 就好，說「說明」可以看我會做什麼。群組討論我會記 ${KEEP_DAYS} 天，不想被記錄跟我說「不要記錄我」。`);
+    case "memberJoined": return reply(pickGreet(WELCOME_GREETS));
     case "memberLeft":
       for (const m of ev.left?.members || []) await db.prepare("DELETE FROM line_members WHERE chat_id=? AND user_id=?").bind(chatId, m.userId).run();
       return;
@@ -284,10 +289,17 @@ async function handle(env, ev, origin) {
     await kv.set(db, "staff:on:" + chatId, "1");
     return reply("好，這裡開始管人員：大家貼排班、貼工作表現不用 @我，我會自動記下來、貼排班卡；說「排班」「表現統計」「法會」隨時看。");
   }
+  // ---- 群組個性（撩人女秘書）：每個群組預設開，Ben 可以關掉或再打開 ----
+  if (group && /^(開啟|打開|關閉|關掉)(秘書)?個性$/.test(sc)) {
+    if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能設定。");
+    const off = /關/.test(sc);
+    await kv.set(db, "persona:" + chatId, off ? "off" : "charm");
+    return reply(off ? "好，這裡我就正經一點說話。" : "好呀～這裡我就放開一點了 😏");
+  }
   // ---- 疏文法會名冊：開啟／關閉（只有管理員） ----
   if (group && /^(開啟|啟用|關閉|停用)名冊(功能)?$/.test(sc)) {
     if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能設定。");
-    if (/關閉|停用/.test(sc)) { await db.prepare("DELETE FROM line_kv WHERE k=?").bind("roster:on:" + chatId).run(); return reply("好，這裡不再做名冊。"); }
+    if (/關閉|停用/.test(sc)) { await kv.set(db, "roster:on:" + chatId, "0"); return reply("好，這裡不再做名冊。"); }
     await kv.set(db, "roster:on:" + chatId, "1");
     return reply("好，這裡可以做名冊了：Ben 貼試算表連結（要哪一頁就貼那一頁的連結），再交代一句，例如「刪掉王小明，分五份，第一份多 30」，不用 @我。我會先貼確認卡，按「確定製作」才開始排版。");
   }

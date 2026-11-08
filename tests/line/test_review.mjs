@@ -42,7 +42,7 @@ t((await adminFor(env, db, G))?.name === "Ben", "admin called Ben");
 // 2. 加入群組、說明 → 卡片
 await send({ type: "join", source: { type: "group", groupId: G } });
 let m = replies()[0]?.[0];
-t(m?.type === "flex" && JSON.stringify(m).includes("大家好，我是小幫手") && JSON.stringify(m).includes("#12524F"), "join card");
+t(m?.type === "text" && /小幫手/.test(m.text) && !/說明|會做什麼|記錄/.test(m.text), "join: greeting only, no feature intro " + JSON.stringify(m));
 await send({ type: "message", source: { type: "group", groupId: G, userId: "U_amy" }, message: { type: "text", id: "1", text: "@小幫手 說明" } });
 m = replies()[0]?.[0];
 t(m?.type === "flex" && JSON.stringify(m).includes("/總結") && !JSON.stringify(m).includes("拆帳單"), "help card in group (no split item)");
