@@ -46,4 +46,15 @@ const html = await (await page.onRequestGet({ request: new Request("https://x.de
 t(/合併請款單（2 張）/.test(html) && /id="p-王小明" open/.test(html) && /class="store"[^>]*><span>香閣/.test(html) && /class="store"[^>]*><span>世盟/.test(html) && /林志明/.test(html) && /公帳分攤/.test(html), "combined page");
 // 每家店不同顏色（同一批不重複）
 { const S2 = await import(R + "/lib/split.js"); const pal = S2.storeColors(["SS", "金錢豹", "世盟"]); t(new Set(Object.values(pal).map(x => x.base)).size === 3, "distinct store colors"); }
+// 7. 收款人（幹部）也在帳單裡：大家轉給他，他自己的不用轉
+{
+  const S3 = await import(R + "/lib/split.js");
+  const txt = await S3.splitContext(db, G);
+  t(/香閣/.test(txt) && /世盟/.test(txt) && /合併後每人：王小明 17,000/.test(txt) && /合計－收款人自己的金額/.test(txt), "split context for chat AI");
+  const ctx = { db, chatId: G };
+  const out = await S3.runSplitTool(ctx, "split_payee", { name: "陳大華" });
+  t(out.ok && out.payee_own === 10000 && out.collect_total === 17000 && out.each_transfer.length === 1 && out.each_transfer[0].amount === 17000, "payee math " + JSON.stringify(out));
+  const cc = JSON.stringify(ctx.cards);
+  t(/請轉給 陳大華：共 \$17,000（陳大華 自己的 10,000 不用轉）/.test(cc) && /陳大華（收款人，自己的不用轉）/.test(cc), "card shows collect total");
+}
 console.log(`${ok} passed, ${bad} failed`);
