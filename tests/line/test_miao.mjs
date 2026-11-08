@@ -19,7 +19,7 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url), body = typeof init.body === "string" ? JSON.parse(init.body) : null;
   calls.push({ url: u, body, auth: init.headers?.authorization || "" });
   if (u.includes("api.anthropic.com")) {
-    claude.push(body.model);
+    claude.push((/判斷這張照片是不是/.test(body.system) ? "check:" : "read:") + body.model);
     const txt = /判斷這張照片是不是/.test(body.system) ? JSON.stringify({ bill: isBill, bill_no: billNo }) : JSON.stringify({ ...BILL, bill_no: billNo });
     return new Response(JSON.stringify({ content: [{ type: "text", text: txt }], stop_reason: "end_turn", usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200 });
   }
@@ -66,10 +66,10 @@ t(claude.length === 0, "main bot skips bill check where miao is in");
 // 5. 每日上限（測試設 2 張）：第三張不讀、只講一次
 billNo = "B2"; await photo("Cg", "U_andy", "p4"); t(/喊我|叫我/.test(rtext()), "2nd bill ok");
 billNo = "B3"; await photo("Cg", "U_andy", "p5");
-t(/明天再來/.test(rtext()) && !claude.some(m => /sonnet/.test(m)), "3rd bill capped, not read");
+t(/明天再來/.test(rtext()) && !claude.some(m => /^read:/.test(m)), "3rd bill capped, not read");
 billNo = "B4"; await photo("Cg", "U_andy", "p6"); t(!replies().length, "cap notice only once a day");
 sq.prepare("UPDATE line_splits SET created=? WHERE bill_no='B1'").run(Date.now() - 20 * 60e3);
-billNo = "B1"; await photo("Cg", "U_andy", "p7"); t(/喊我|叫我/.test(rtext()) && !claude.some(m => /sonnet/.test(m)), "same bill re-post still answered without re-reading");
+billNo = "B1"; await photo("Cg", "U_andy", "p7"); t(/喊我|叫我/.test(rtext()) && !claude.some(m => /^read:/.test(m)), "same bill re-post still answered without re-reading");
 
 // 6. 文字：沒 @ 的閒聊不回；「請款單」「拆帳紀錄」不用 @；@ 了說別的 → 說明
 await text("Cg", "U_andy", "今天喝很多"); t(!replies().length, "chatter ignored");
@@ -149,7 +149,7 @@ t(await V.tease(env, db, { chatId: "Cgap", group: true, split: { id: "zz2", d: {
 // 12. 群組裡 @拆帳喵 回覆一張不是帳單的照片說「拆帳」：回一句、不讀帳單
 isBill = false;
 await grp("Cg2", "U_andy", { type: "text", id: "q1", text: "@拆帳喵 拆帳", quotedMessageId: "img9", mention: { mentionees: [{ index: 0, length: 4, isSelf: true }] } });
-t(/不收|不是我要的|不歸我管/.test(rtext()) && !claude.some(m => /sonnet/.test(m)), "tagged non-bill → short line, no read");
+t(/不收|不是我要的|不歸我管/.test(rtext()) && !claude.some(m => /^read:/.test(m)), "tagged non-bill → short line, no read");
 isBill = true;
 
 console.log(`${ok} passed, ${bad} failed`);

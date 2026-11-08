@@ -28,7 +28,7 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url), body = typeof init.body === "string" ? JSON.parse(init.body) : null; calls.push({ url: u, body });
   if (u.includes("oauth2/v2.1/verify")) { const tk = new URLSearchParams(String(init.body)).get("id_token"); return tk === "bad" ? new Response("{}", { status: 400 }) : new Response(JSON.stringify({ sub: tk }), { status: 200 }); }
   if (u.includes("api.anthropic.com")) {
-    claudeCalls.push(body.model + ":" + body.system.slice(0, 12));
+    claudeCalls.push((/判斷這張照片是不是/.test(body.system) ? "check:" : "read:") + body.model + ":" + body.system.slice(0, 12));
     const txt = /判斷這張照片是不是/.test(body.system) ? JSON.stringify({ bill: isBill, bill_no: isBill ? "61020010[005-1]" : "" })
       : /帳單判讀/.test(body.system) ? JSON.stringify(BILL) : /拆一張酒店帳單/.test(body.system) ? JSON.stringify(guestsAnswer || { answer: false }) : "好";
     return new Response(JSON.stringify({ content: [{ type: "text", text: txt }], stop_reason: "end_turn", usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200 });
@@ -68,7 +68,7 @@ t(r1.people.reduce((a, p) => a + p.total, 0) === 108600, "uneven split still sum
 
 // 1. 沒說過開啟的群組：預設用嚴格標準（只認酒店／KTV 帳單），不是就不回
 isBill = false; await photo("U_andy", "p0");
-t(claudeCalls.length === 1 && /haiku/.test(claudeCalls[0]) && calls.some(c => c.body?.system && /小姐的代支/.test(c.body.system)) && !replies().length, "default strict check, silent");
+t(claudeCalls.length === 1 && /^check:/.test(claudeCalls[0]) && calls.some(c => c.body?.system && /小姐的代支/.test(c.body.system)) && !replies().length, "default strict check, silent");
 // 廠商群組不判斷
 sq.prepare(`INSERT INTO line_kv VALUES('flows','[{"notify":"Cvendor"}]')`).run(); claudeCalls.length = 0;
 await send({ type: "message", source: { type: "group", groupId: "Cvendor", userId: "U_andy" }, message: { type: "image", id: "pv" } });
@@ -81,13 +81,13 @@ t(sq.prepare("SELECT v FROM line_kv WHERE k='split:on:Cbar'").get()?.v === "1", 
 await say("U_andy", "說明"); t(JSON.stringify(replies()[0]).includes("拆帳單"), "help card shows split item when on");
 // 3. 一般照片：只花 Haiku、不回
 isBill = false; claudeCalls.length = 0; await photo("U_andy", "p1");
-t(claudeCalls.length === 1 && /haiku/.test(claudeCalls[0]) && !replies().length && calls.some(c => c.body?.system && /小姐的代支/.test(c.body.system)), "non-bill photo silent (strict even when enabled)");
+t(claudeCalls.length === 1 && /^check:/.test(claudeCalls[0]) && !replies().length && calls.some(c => c.body?.system && /小姐的代支/.test(c.body.system)), "non-bill photo silent (strict even when enabled)");
 // 4. 帳單照片 → 讀帳單 → @Ben 問人名
 isBill = true; claudeCalls.length = 0; await photo("U_andy", "p2");
 let m = replies();
-t(claudeCalls.some(c => /sonnet/.test(c)), "sonnet reads bill");
+t(claudeCalls.some(c => /^read:/.test(c)), "sonnet reads bill");
 const bodies = calls.filter(c => c.url.includes("anthropic")).map(c => c.body);
-t(bodies.filter(b => /haiku/.test(b.model)).every(b => b.thinking?.type === "disabled") && bodies.some(b => /haiku/.test(b.model)), "haiku thinking off");
+t(bodies.filter(b => /判斷這張照片是不是/.test(b.system)).every(b => b.thinking?.type === "disabled" && !/haiku/.test(b.model)) && bodies.some(b => /判斷這張照片是不是/.test(b.system)), "bill check: no haiku, thinking off");
 t(m.length === 1 && m[0]?.type === "flex" && /如要拆單服務，請填寫表單/.test(m[0].altText), "one line + form button " + JSON.stringify(m).slice(0, 200));
 t(!JSON.stringify(m).includes("108,600") && !JSON.stringify(m).includes("代支"), "no bill breakdown in chat");
 t(JSON.stringify(m[0]).includes("/split/form?t=") && JSON.stringify(m[0]).includes("填寫拆帳表單"), "form button");
@@ -171,7 +171,7 @@ t(sq.prepare("SELECT count(*) n FROM line_splits").get().n === 2 && /請填寫�
 // 11. 私訊（Ben）傳帳單照片：也直接給表單，不走一般分析
 isBill = true; claudeCalls.length = 0;
 await send({ type: "message", source: { type: "user", userId: "U_ben" }, message: { type: "image", id: "dm1" } });
-t(/如要拆單服務/.test(replies()[0]?.altText || "") && claudeCalls.filter(c => /sonnet/.test(c)).length === 1 && sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='U_ben'").get().n === 1, "DM bill → form " + JSON.stringify(replies()).slice(0, 150));
+t(/如要拆單服務/.test(replies()[0]?.altText || "") && claudeCalls.filter(c => /^read:/.test(c)).length === 1 && sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='U_ben'").get().n === 1, "DM bill → form " + JSON.stringify(replies()).slice(0, 150));
 // 12. 內嵌視窗：只有 Ben 能送；按鈕改成 liff.line.me；liff.state 轉址
 sq.prepare("INSERT INTO line_kv VALUES('liff:split','2012283214-XTQGE9lq')").run();
 const pl = body => fm.onRequestPost({ request: new Request(furl, { method: "POST", body: JSON.stringify(body) }), env });
@@ -212,7 +212,7 @@ sq.prepare("UPDATE line_kv SET v='1' WHERE k='split:on:Cbar'").run();
 sq.prepare("UPDATE line_splits SET status='done' WHERE chat_id='Cbar'").run();
 isBill = true; claudeCalls.length = 0;
 await photo("U_andy", "p20");
-{ const m = replies(); t(/已經拆過帳了/.test(m[0]?.altText || "") && JSON.stringify(m).includes("重新拆帳") && JSON.stringify(m).includes("sp:post:") && !claudeCalls.some(c => /sonnet/.test(c)), "repost done bill → redo prompt, no re-read " + JSON.stringify(m).slice(0, 120)); }
+{ const m = replies(); t(/已經拆過帳了/.test(m[0]?.altText || "") && JSON.stringify(m).includes("重新拆帳") && JSON.stringify(m).includes("sp:post:") && !claudeCalls.some(c => /^read:/.test(c)), "repost done bill → redo prompt, no re-read " + JSON.stringify(m).slice(0, 120)); }
 await send({ type: "postback", source: { type: "group", groupId: G, userId: "U_ben" }, postback: { data: "split:no" } });
 t(!replies().length, "不用 → quiet");
 calls.length = 0;

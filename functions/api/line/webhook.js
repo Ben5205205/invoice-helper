@@ -13,6 +13,7 @@ import { normStore, facts, sampleCard } from "../../../lib/billstats.js";
 import { isPrivate, archive, addPending, saveCmd, savePending, fileMessages } from "../../../lib/vault.js";
 import { staffOn, watchStaff } from "../../../lib/staffing.js";
 import { rosterOn, sheetLink, startRoster, goRoster } from "../../../lib/roster.js";
+import { callsName, stripName, isForBot } from "../../../lib/address.js";
 import { setOwner } from "../../bo/index.js";
 import { handleMiao } from "../../../lib/miao.js";
 import { isAudioName, transcribe, saveTranscript, recordTranscribe, budgetLeft, findTranscripts, MAX_AUDIO } from "../../../lib/audio.js";
@@ -194,7 +195,7 @@ async function handle(env, ev, origin) {
   if (typedAt) text = text.replace(/[@＠]\s?小幫手/g, "");
   text = text.trim();
   const command = text.startsWith("/") || text.startsWith("／") ? text.replace(/^[/／]\s*/, "") : null;
-  const addressed = !group || priv || self.length > 0 || typedAt || command !== null;   // 群組裡只有 @小幫手 或按鈕送出的「/」指令才回應
+  let addressed = !group || priv || self.length > 0 || typedAt || command !== null;   // @小幫手、按鈕送出的「/」指令；下面再判斷沒 @ 但是在跟它說話的
 
   // 群組裡的一般訊息只記錄，不回應
   if (group && !who.optout && !(command && /^(不要記錄我|恢復記錄|清除紀錄)$/.test(command))) await record(db, chatId, userId, who.name, raw);
@@ -215,6 +216,13 @@ async function handle(env, ev, origin) {
       await line.loading(chatId, 60).catch(() => {});
       return startRoster(env, db, line, { chatId, userId, text: raw.replace(/https?:\/\/\S+/g, "").replace(/[@＠]\s?小幫手/g, "").trim(), link, replyToken: ev.replyToken, quotedJob: link ? null : qj });
     }
+  }
+  // 沒 @ 也聽得懂：A 回覆小幫手的訊息、B 開頭叫「小幫手」、C 剛跟它講完接著說／依上下文看出是在問它（廠商群組只認 A、B）
+  if (group && !addressed && !who.optout) {
+    if (callsName(text)) { addressed = true; text = stripName(text); }
+    else if (msg.quotedMessageId && (await quotedBot(db, msg.quotedMessageId))) addressed = true;
+    else if (!(await kv.json(db, "flows", []).catch(() => [])).some(f => f.notify === chatId)
+      && (await isForBot(env, db, { chatId, userId, name: who.name, text, ts: ev.timestamp || Date.now(), isAdmin: await isAdmin(db, userId) }))) addressed = true;
   }
   if (group && !addressed && !who.optout) await watchCommit(env, db, line, { chatId, userId, name: who.name, text: raw, replyToken: ev.replyToken, chatName: await kv.get(db, "name:" + chatId) }).catch(e => console.log("watchCommit", e.message));
   if (!addressed) return;

@@ -5,6 +5,7 @@ import { recordPush, monthlyReport, checkQuota, checkSpendAlert } from "../../..
 import { gas, gasConf } from "../../../lib/books.js";
 import { runFlows } from "../../../lib/orders.js";
 import { buildDigests } from "../../../lib/digest.js";
+import { refreshProfiles } from "../../../lib/address.js";
 import { cleanupTranscripts } from "../../../lib/audio.js";
 import { pendingCards } from "../../../lib/split.js";
 import { rosterTick } from "../../../lib/roster.js";
@@ -102,6 +103,11 @@ export async function onRequestPost({ request, env }) {
     await db.prepare("DELETE FROM line_reminders WHERE status!='open' AND created<?").bind(now - 90 * 864e5).run();
     await db.prepare("DELETE FROM line_kv WHERE k LIKE 'ai:%' AND k<?").bind("ai:" + ymd(now - 7 * 864e5)).run();
     await cleanupTranscripts(db, now).catch(e => console.log("tx cleanup", e.message));
+  }
+  // 每天清晨 4 點：重新整理有在聊的群組的成員和關係
+  if (tp_hour(now) === 4 && (await kv.get(db, "profile:last")) !== today) {
+    await kv.set(db, "profile:last", today);
+    try { sent.profiles = await refreshProfiles(env, db, now); } catch (e) { console.log("profiles failed", e.message); }
   }
   return Response.json({ ok: true, ...sent });
 }
