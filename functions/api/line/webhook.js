@@ -13,7 +13,7 @@ import { normStore, facts, sampleCard } from "../../../lib/billstats.js";
 import { isPrivate, archive, addPending, saveCmd, savePending, fileMessages } from "../../../lib/vault.js";
 import { staffOn, watchStaff } from "../../../lib/staffing.js";
 import { rosterOn, sheetLink, startRoster, goRoster } from "../../../lib/roster.js";
-import { callsName, stripName, isForBot } from "../../../lib/address.js";
+import { callsName, stripName, isForBot, buildProfile } from "../../../lib/address.js";
 import { setOwner } from "../../bo/index.js";
 import { handleMiao } from "../../../lib/miao.js";
 import { isAudioName, transcribe, saveTranscript, recordTranscribe, budgetLeft, findTranscripts, MAX_AUDIO } from "../../../lib/audio.js";
@@ -296,6 +296,13 @@ async function handle(env, ev, origin) {
     if (/關閉|停用/.test(sc)) { await db.prepare("DELETE FROM line_kv WHERE k=?").bind("staff:on:" + chatId).run(); return reply("好，這裡不再自動記排班和表現。"); }
     await kv.set(db, "staff:on:" + chatId, "1");
     return reply("好，這裡開始管人員：大家貼排班、貼工作表現不用 @我，我會自動記下來、貼排班卡；說「排班」「表現統計」「法會」隨時看。");
+  }
+  // ---- 群組成員和關係：每天清晨自動整理；Ben 說「整理群組關係」馬上整理並列出來 ----
+  if (group && /^(整理|更新|看看?)(一下)?(群組|這群)?(成員|關係|人物|人)(關係)?$/.test(sc)) {
+    if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能用。");
+    const p = await buildProfile(env, db, chatId).catch(e => { console.log("profile", e.message); return null; });
+    if (!p) return reply("這裡的對話還太少，看不出大家的關係。");
+    return reply("我目前的理解：\n" + p.members.map(m => `・${m.name}${m.gender && m.gender !== "?" ? "（" + m.gender + "）" : ""}${m.role ? "：" + m.role : ""}${m.notes ? "，" + m.notes : ""}`).join("\n") + (p.relations ? "\n" + p.relations : "") + (p.bot_role ? "\n我在這裡：" + p.bot_role : "") + "\n有不對的直接跟我說，例如「蚊子是幹部」。");
   }
   // ---- 群組個性（撩人女秘書）：每個群組預設開，Ben 可以關掉或再打開 ----
   if (group && /^(開啟|打開|關閉|關掉)(秘書|酒局|夜場)?個性$|^(輕佻|放開|正經)一點$/.test(sc)) {
