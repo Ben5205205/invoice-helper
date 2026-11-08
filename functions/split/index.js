@@ -3,6 +3,8 @@ import { kv } from "../../lib/assistant.js";
 import { compute, fmt, combine, storeColor, storeColors } from "../../lib/split.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// 店家配色：主色→深色的斜向漸層，點綴色給小字，右上角一個淡淡的浮水印字
+const heroStyle = n => { const c = storeColor(n); return `background:linear-gradient(135deg,${c.base},${c.deep});--accent:${c.accent};--deep:${c.deep}`; };
 const tw = ms => { const t = new Date(ms + 8 * 3600e3); return `${t.getUTCFullYear()}/${t.getUTCMonth() + 1}/${t.getUTCDate()}`; };
 
 export async function onRequestGet({ request, env }) {
@@ -64,7 +66,7 @@ function detail(r, t, focus) {
   const shared = (d.shared || []).map(s => `<tr><td>${esc(s.name)}${s.qty > 1 ? `<small>${s.qty} × ${fmt(s.price)}</small>` : ""}</td><td>${s.who ? s.who.map(nm).join("、") : "全部平分"}</td><td class="num">${fmt(s.amount)}</td></tr>`).join("");
   const photos = [0, 1, 2, 3].map(n => `<a href="/split/img?t=${esc(t)}&id=${esc(r.id)}&n=${n}" target="_blank" class="ph" data-n="${n}"><img loading="lazy" src="/split/img?t=${esc(t)}&id=${esc(r.id)}&n=${n}" alt="帳單照片" onerror="this.parentNode.remove()"></a>`).join("");
   return `
-    <header class="hero" style="background:${storeColor(d.store).base}"><a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>
+    <header class="hero" style="${heroStyle(d.store)}"><span class="mark" aria-hidden="true">${esc(storeColor(d.store).mark)}</span><a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>
       <div class="kicker">${r.status === "done" ? "請款單" : "拆帳中"}</div><h1>${esc(d.store || "帳單")}</h1>
       <div class="meta light">${esc(d.date || tw(r.created))}${d.bill_no ? "｜單號 " + esc(d.bill_no) : ""}</div>
       <div class="total"><span>現金總額</span><b>$${fmt(d.cash)}</b></div>${d.card ? `<div class="meta light">刷卡價格 $${fmt(d.card)}</div>` : ""}${d.payee ? `<div class="payto">請轉給 <b>${esc(d.payee)}</b></div>` : ""}</header>
@@ -110,7 +112,7 @@ function page(title, body, status = 200) {
 :root{--brand:#12524F;--soft:#EEF2F1;--ink:#1F2937;--sub:#6B7280;--line:#E5E7EB;--bg:#F6F8F7;--card:#FFFFFF;--accent:#F28C28}
 @media (prefers-color-scheme:dark){:root{--soft:#1E2B2A;--ink:#E8EEED;--sub:#9AA8A6;--line:#2A3735;--bg:#0F1716;--card:#16201F}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif;-webkit-font-smoothing:antialiased}
-.hero{background:var(--brand);color:#fff;padding:22px 18px 26px;border-radius:0 0 22px 22px}
+.hero{background:var(--brand);color:#fff;padding:22px 18px 26px;border-radius:0 0 22px 22px;position:relative;overflow:hidden}.hero>*{position:relative}.hero .mark{position:absolute;right:14px;top:-18px;font-size:120px;font-weight:800;line-height:1;color:#fff;opacity:.07;pointer-events:none;font-family:serif}.hero .kicker,.hero .total span{color:var(--accent,#CFE3E1)}.hero .payto{color:var(--accent,#FFD9B0)}
 .hero h1{margin:2px 0 4px;font-size:24px;letter-spacing:.5px}.payto{margin-top:10px;display:inline-block;background:rgba(242,140,40,.18);color:#FFD9B0;border-radius:999px;padding:5px 12px;font-size:13.5px}.payto b{color:#fff}.kicker{font-size:12px;color:#CFE3E1;letter-spacing:1px}
 .back{color:#CFE3E1;text-decoration:none;font-size:14px;display:inline-block;margin-bottom:10px}
 .meta{font-size:13px;color:var(--sub)}.meta.light{color:#CFE3E1}
