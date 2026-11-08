@@ -38,7 +38,8 @@ function detail(r, t, focus) {
   const top = res && res.payers.length > 1 ? Math.max(...res.payers.map(x => x.total)) : null;
   const payers = res ? res.payers.map(p => {
     const person = res.people.find(x => x.id === p.id);
-    return `<div class="payer"><div class="payer-top"><div class="pname">${top !== null && p.total === top && top > 0 ? '👑 ' : ""}${esc(p.name)}${top !== null && p.total === top && top > 0 ? '<span class="vvip">VVIP</span>' : ""}</div><div class="pamt">$${fmt(p.total)}</div></div>
+    const vip = top !== null && p.total === top && top > 0;
+    return `<div class="payer${vip ? " no1" : ""}">${vip ? '<div class="badge">👑 恩客NO.1 ✨</div>' : ""}<div class="payer-top"><div class="pname">${esc(p.name)}</div><div class="pamt">$${fmt(p.total)}</div></div>
       <div class="psub">小姐 ${fmt(person.hostess)}｜公費 ${fmt(person.shared)}</div>
       ${p.includes.map(x => `<div class="inc">＋ 含 ${esc(x.name)} $${fmt(x.total)}</div>`).join("")}</div>`;
   }).join("") : "";
@@ -91,7 +92,7 @@ main{max-width:640px;margin:0 auto;padding:6px 16px 40px}h2{font-size:13px;color
 .chip.pending{background:#FFF4E8;color:#B45309}
 .payer{padding:14px 0;border-bottom:1px solid var(--line)}.payer:last-child{border:0}
 .payer-top{display:flex;justify-content:space-between;align-items:baseline}.pname{font-weight:700;font-size:17px}.pamt{font-weight:800;font-size:21px;color:var(--brand);font-variant-numeric:tabular-nums}
-.psub{font-size:12px;color:var(--sub)}.vvip{margin-left:6px;font-size:11px;font-weight:800;color:#fff;background:var(--accent);border-radius:999px;padding:1px 7px;vertical-align:2px;letter-spacing:.5px}.inc{font-size:13px;color:var(--accent);margin-top:2px}
+.psub{font-size:12px;color:var(--sub)}.payer.no1{background:linear-gradient(135deg,#FFF6EA,#FFEBD3);border:1px solid #F6C48F;border-radius:14px;padding:12px 14px;margin:8px -6px}.payer.no1 .pname{color:#9A4A0B}.payer.no1 .pamt{color:#D9731A!important}.badge{display:inline-block;font-size:11.5px;font-weight:800;color:#fff;background:var(--accent);border-radius:999px;padding:2px 10px;margin-bottom:6px;letter-spacing:.5px;box-shadow:0 1px 3px rgba(242,140,40,.35)}@media (prefers-color-scheme:dark){.payer.no1{background:linear-gradient(135deg,#3A2A18,#2E2214);border-color:#7A5326}.payer.no1 .pname{color:#FFD9B0}}.inc{font-size:13px;color:var(--accent);margin-top:2px}
 details{border-bottom:1px solid var(--line)}details:last-child{border:0}summary{display:flex;justify-content:space-between;padding:13px 0;cursor:pointer;list-style:none;font-weight:600}
 summary::-webkit-details-marker{display:none}summary em{font-style:normal;font-size:12px;color:var(--sub);margin-left:6px;font-weight:400}
 details ul{list-style:none;margin:0 0 12px;padding:0}details li{display:flex;justify-content:space-between;font-size:13.5px;color:var(--sub);padding:3px 0 3px 12px;gap:10px;font-variant-numeric:tabular-nums}

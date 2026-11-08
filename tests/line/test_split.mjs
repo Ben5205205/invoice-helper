@@ -131,9 +131,10 @@ t(JSON.parse(sq.prepare("SELECT data FROM line_splits WHERE id=?").get(sid).data
 let pushed = { body: { messages: posted } };
 const card = JSON.stringify(pushed.body.messages[1]);
 t(card.includes("$40,818") && /含 I [\d,]+/.test(card) && /小姐 [\d,]+　公帳分攤 [\d,]+/.test(card) && card.includes("$27,424") && card.includes("$21,894") && card.includes("$18,464") && card.includes("$108,600"), "result card amounts");
-// 付最多的人加小皇冠 VVIP（只有一個）
+// 付最多的人：恩客NO.1（只有一個）
 { const c = JSON.parse(card), rowsC = c.contents.body.contents.filter(x => x.type === "box"); const vipRow = rowsC.find(x => JSON.stringify(x).includes("VVIP"));
-  t((card.match(/VVIP/g) || []).length === 1 && JSON.stringify(vipRow).includes("$40,818"), "VVIP crown on top payer"); }
+  const vipRow2 = rowsC.find(x => JSON.stringify(x).includes("恩客NO.1"));
+  t((card.match(/恩客NO\.1/g) || []).length === 1 && JSON.stringify(vipRow2).includes("$40,818") && vipRow2.backgroundColor, "恩客NO.1 on top payer"); }
 // 每個人一列：只寫小姐＋公帳分攤，整列點進去是他自己的明細（網頁打開那一段）
 t(!/小姐｜[^點]/.test(card.replace(/位小姐｜/g, "")) && /&p=[\w%-]+#p-[\w%-]+/.test(card) && /明細 ›/.test(card), "card is compact " + [/小姐｜/.test(card), /明細 ›/.test(card), (card.match(/.{40}小姐｜.{40}/) || [""])[0]].join(" "));
 t(sq.prepare("SELECT status FROM line_splits WHERE id=?").get(sid).status === "done", "saved done");
