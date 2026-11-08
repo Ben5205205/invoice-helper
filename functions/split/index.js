@@ -35,9 +35,10 @@ export async function onRequestGet({ request, env }) {
 function detail(r, t, focus) {
   const d = JSON.parse(r.data || "{}"), res = r.result ? JSON.parse(r.result) : (d.guests?.length ? compute(d) : null);
   const nm = id => esc((d.guests || []).find(g => g.id === id)?.name || "未指定");
+  const top = res && res.payers.length > 1 ? Math.max(...res.payers.map(x => x.total)) : null;
   const payers = res ? res.payers.map(p => {
     const person = res.people.find(x => x.id === p.id);
-    return `<div class="payer"><div class="payer-top"><div class="pname">${esc(p.name)}</div><div class="pamt">$${fmt(p.total)}</div></div>
+    return `<div class="payer"><div class="payer-top"><div class="pname">${top !== null && p.total === top && top > 0 ? '👑 ' : ""}${esc(p.name)}${top !== null && p.total === top && top > 0 ? '<span class="vvip">VVIP</span>' : ""}</div><div class="pamt">$${fmt(p.total)}</div></div>
       <div class="psub">小姐 ${fmt(person.hostess)}｜公費 ${fmt(person.shared)}</div>
       ${p.includes.map(x => `<div class="inc">＋ 含 ${esc(x.name)} $${fmt(x.total)}</div>`).join("")}</div>`;
   }).join("") : "";
@@ -90,7 +91,7 @@ main{max-width:640px;margin:0 auto;padding:6px 16px 40px}h2{font-size:13px;color
 .chip.pending{background:#FFF4E8;color:#B45309}
 .payer{padding:14px 0;border-bottom:1px solid var(--line)}.payer:last-child{border:0}
 .payer-top{display:flex;justify-content:space-between;align-items:baseline}.pname{font-weight:700;font-size:17px}.pamt{font-weight:800;font-size:21px;color:var(--brand);font-variant-numeric:tabular-nums}
-.psub{font-size:12px;color:var(--sub)}.inc{font-size:13px;color:var(--accent);margin-top:2px}
+.psub{font-size:12px;color:var(--sub)}.vvip{margin-left:6px;font-size:11px;font-weight:800;color:#fff;background:var(--accent);border-radius:999px;padding:1px 7px;vertical-align:2px;letter-spacing:.5px}.inc{font-size:13px;color:var(--accent);margin-top:2px}
 details{border-bottom:1px solid var(--line)}details:last-child{border:0}summary{display:flex;justify-content:space-between;padding:13px 0;cursor:pointer;list-style:none;font-weight:600}
 summary::-webkit-details-marker{display:none}summary em{font-style:normal;font-size:12px;color:var(--sub);margin-left:6px;font-weight:400}
 details ul{list-style:none;margin:0 0 12px;padding:0}details li{display:flex;justify-content:space-between;font-size:13.5px;color:var(--sub);padding:3px 0 3px 12px;gap:10px;font-variant-numeric:tabular-nums}
