@@ -94,7 +94,7 @@ t(claudeBodies.some(b => (b.tools || []).some(x => x.name === "staff_card")), "s
 sq.prepare("INSERT INTO line_kv VALUES(?,?)").run("persona:" + G, "charm");
 extract = {}; await say("U_ben", "誰最快", true);
 const sys = JSON.stringify(claudeBodies.find(b => !/排班秘書/.test(JSON.stringify(b.system)))?.system || "");
-t(/默契感/.test(sys) && /女性：像可靠又會講話的好姊妹/.test(sys) && /已排的班：.*陳小明/.test(sys) && /工作表現：.*陳小明 每小時 300/.test(sys), "persona + staff data in prompt");
+t(/像盈盈對令狐沖/.test(sys) && /女性：溫和得體/.test(sys) && /已排的班：.*陳小明/.test(sys) && /工作表現：.*陳小明 每小時 300/.test(sys), "persona + staff data in prompt");
 // 9. 提醒：前一天 18:00、09:00 缺人
 const L = (await import(R + "/lib/line.js")).lineClient("t");
 const at = (d, h) => Date.parse(d + "T00:00:00Z") - 8 * 3600e3 + h * 3600e3 + 60e3;
