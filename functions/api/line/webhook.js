@@ -198,7 +198,9 @@ async function handle(env, ev, origin) {
   // 疏文人員管理群：排班、工作表現不用 @，看懂就記下來並貼排班卡
   const staff = group && (await staffOn(db, chatId));
   const staffCmd = /^(開啟|啟用|關閉|停用)人員管理$/.test(text.replace(/[。！!～~\s]+$/g, ""));
-  if (staff && !who.optout && command === null && !staffCmd) { if (await watchStaff(env, db, line, { chatId, userId, name: who.name, text: raw.replace(/[@＠]\s?小幫手/g, "").trim(), replyToken: ev.replyToken, ts: ev.timestamp || Date.now(), quotedId: msg.quotedMessageId || null }).catch(e => { console.log("watchStaff", e.message); return false; })) return; }
+  // 回覆的是照片／檔案（例如「這張圖是法會日期，幫忙新增」）：交給一般對話，它看得到圖片，也能用新增法會的工具
+  const quotesMedia = !!msg.quotedMessageId && !!(await db.prepare("SELECT 1 FROM line_msgs WHERE chat_id=? AND media IN (?,?,?,?) LIMIT 1").bind(chatId, msg.quotedMessageId, "file:" + msg.quotedMessageId, "audio:" + msg.quotedMessageId, "video:" + msg.quotedMessageId).first());
+  if (staff && !who.optout && command === null && !staffCmd && !quotesMedia) { if (await watchStaff(env, db, line, { chatId, userId, name: who.name, text: raw.replace(/[@＠]\s?小幫手/g, "").trim(), replyToken: ev.replyToken, ts: ev.timestamp || Date.now(), quotedId: msg.quotedMessageId || null }).catch(e => { console.log("watchStaff", e.message); return false; })) return; }
   // 疏文法會名冊：開了名冊的群組，Ben 貼試算表連結（或回覆確認卡修改）不用 @
   if (group && command === null && (await rosterOn(db, chatId)) && (await isAdmin(db, userId))) {
     const link = sheetLink(raw), qj = msg.quotedMessageId ? await kv.get(db, "roster:card:" + msg.quotedMessageId) : null;

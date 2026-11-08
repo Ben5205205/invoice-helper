@@ -160,4 +160,12 @@ calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 6)); t(!calls.some(c =
   t(/王小華 的表現紀錄/.test(pc) && /第 2 次/.test(pc) && /117 → 99/.test(pc), "person card " + pc.slice(0, 300));
   extract = null;
 }
+// 回覆照片說「這張圖是法會日期，幫忙新增」：不給排班判讀攔走，交給看得到圖片的一般對話
+{
+  sq.prepare("INSERT INTO line_msgs(chat_id,user_id,name,text,ts,media) VALUES(?,?,?,?,?,?)").run(G, "U_ben", "Ben", "［傳了一張照片］", Date.now() - 60e3, "imgcal");
+  extract = { reply: "我看不到圖片內容" };
+  ms = await send({ type: "message", source: { type: "group", groupId: G, userId: "U_ben" }, message: { type: "text", id: "mqi", text: "@小幫手 這張圖是今年其他需要人手的日期，幫忙新增。", quotedMessageId: "imgcal", mention: { mentionees: [{ index: 0, length: 4, isSelf: true }] } } });
+  t(!claudeBodies.some(b => /排班秘書/.test(JSON.stringify(b.system))) && !/看不到圖片/.test(js(ms)), "quoted image goes to chat " + js(ms).slice(0, 200));
+  extract = null;
+}
 console.log(`${ok} passed, ${bad} failed`);
