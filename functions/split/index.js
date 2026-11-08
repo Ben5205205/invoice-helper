@@ -1,6 +1,6 @@
 // GET /split?t=<群組代碼>[&id=<帳單>] — 拆帳紀錄網頁（只有拿到群組連結的人打得開）
 import { kv } from "../../lib/assistant.js";
-import { compute, fmt } from "../../lib/split.js";
+import { compute, fmt, combine } from "../../lib/split.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const tw = ms => { const t = new Date(ms + 8 * 3600e3); return `${t.getUTCFullYear()}/${t.getUTCMonth() + 1}/${t.getUTCDate()}`; };
@@ -11,6 +11,14 @@ export async function onRequestGet({ request, env }) {
   const chatId = t.length >= 20 ? await kv.get(db, "splittok:" + t) : null;
   if (!chatId) return page("找不到", `<div class="empty">連結不對或已失效。</div>`, 404);
   const group = (await kv.get(db, "name:" + chatId)) || "群組";
+  // 合併請款單：好幾張單一起看，每個人每家店分開列
+  const ids = (u.searchParams.get("ids") || "").split(",").filter(x => /^\w{2,20}$/.test(x)).slice(0, 8);
+  if (ids.length > 1) {
+    const rows = [];
+    for (const x of ids) { const r = await db.prepare("SELECT * FROM line_splits WHERE id=? AND chat_id=? AND status='done'").bind(x, chatId).first(); if (r && r.result) rows.push({ ...r, d: JSON.parse(r.data || "{}"), res: JSON.parse(r.result) }); }
+    if (rows.length < 2) return page("找不到", `<div class="empty">找不到這幾張帳單。</div>`, 404);
+    return page(`合併請款單｜${group}`, combinedPage(rows, t, u.searchParams.get("p")));
+  }
   if (id) {
     const r = await db.prepare("SELECT * FROM line_splits WHERE id=? AND chat_id=?").bind(id, chatId).first();
     if (!r) return page("找不到", `<div class="empty">找不到這張帳單。</div>`, 404);
@@ -70,6 +78,31 @@ function detail(r, t, focus) {
     </main>`;
 }
 
+function combinedPage(bills, t, focus) {
+  const c = combine(bills);
+  const people = c.people.map(p => {
+    const vip = c.top !== null && p.total === c.top && c.top > 0;
+    const stores = p.stores.map(s => {
+      const b = bills.find(x => x.id === s.id), res = b.res, d = b.d;
+      // 這家店裡他（和併給他的人）的每一筆，小姐和公帳分開
+      const mine = res.people.filter(x => x.name === p.name || (d.merge || {})[x.id] === res.people.find(y => y.name === p.name)?.id);
+      const items = mine.flatMap(x => x.items.map(i => ({ ...i, who: x.name !== p.name ? x.name : "" })));
+      const hi = items.filter(i => i.name.startsWith("小姐｜")), si = items.filter(i => !i.name.startsWith("小姐｜"));
+      const li = arr => arr.map(i => `<li><span>${esc(i.name.replace(/^小姐｜/, ""))}${i.who ? `<em>${esc(i.who)}</em>` : ""}</span><span>${fmt(i.amount)}</span></li>`).join("");
+      return `<li class="store"><span>${esc(s.store)}<a href="?t=${esc(t)}&id=${esc(s.id)}">整張 ›</a></span><span>${fmt(s.total)}</span></li>
+        ${hi.length ? `<li class="grp"><span>小姐</span><span>${fmt(s.hostess)}</span></li>${li(hi)}` : ""}
+        ${si.length ? `<li class="grp"><span>公帳分攤</span><span>${fmt(s.shared)}</span></li>${li(si)}` : ""}`;
+    }).join("");
+    return `<details id="p-${esc(p.name)}"${focus === p.name ? ' open class="focus"' : ""}><summary><span>${vip ? '<i class="badge">👑 恩客NO.1 ✨</i>' : ""}${esc(p.name)}</span><b>$${fmt(p.total)}</b></summary><ul>${stores}</ul></details>`;
+  }).join("");
+  return `
+    <header class="hero"><a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>
+      <div class="kicker">合併請款單（${bills.length} 張）</div><h1>${bills.map(b => esc(b.d.store || "帳單")).join("＋")}</h1>
+      ${bills.map(b => `<div class="meta light">${esc(b.d.store || "帳單")}　$${fmt(b.res.total)}</div>`).join("")}
+      <div class="total"><span>合計</span><b>$${fmt(c.total)}</b></div></header>
+    <main><h2>每個人（點開看每家店）</h2><section class="card people">${people}</section></main>`;
+}
+
 function page(title, body, status = 200) {
   return new Response(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>${esc(title)}</title><style>
@@ -96,7 +129,7 @@ main{max-width:640px;margin:0 auto;padding:6px 16px 40px}h2{font-size:13px;color
 details{border-bottom:1px solid var(--line)}details:last-child{border:0}summary{display:flex;justify-content:space-between;padding:13px 0;cursor:pointer;list-style:none;font-weight:600}
 summary::-webkit-details-marker{display:none}summary em{font-style:normal;font-size:12px;color:var(--sub);margin-left:6px;font-weight:400}
 details ul{list-style:none;margin:0 0 12px;padding:0}details li{display:flex;justify-content:space-between;font-size:13.5px;color:var(--sub);padding:3px 0 3px 12px;gap:10px;font-variant-numeric:tabular-nums}
-details li.grp{padding:8px 0 2px;color:var(--ink);font-weight:600;font-size:13px}details.focus{background:var(--soft);margin:0 -16px;padding:0 16px;border-radius:12px}
+details li.store{padding:12px 0 2px;color:var(--brand);font-weight:700;font-size:14px;border-top:1px dashed var(--line);margin-top:4px}details li.store a{margin-left:8px;font-size:12px;color:var(--accent);text-decoration:none;font-weight:600}details li em{font-style:normal;font-size:11px;color:var(--accent);margin-left:6px}summary .badge{font-style:normal;margin-right:6px;font-size:10.5px;padding:1px 8px;vertical-align:1px}details li.grp{padding:8px 0 2px;color:var(--ink);font-weight:600;font-size:13px}details.focus{background:var(--soft);margin:0 -16px;padding:0 16px;border-radius:12px}
 table{width:100%;border-collapse:collapse;font-size:14px}th{font-size:12px;color:var(--sub);font-weight:500;text-align:left;padding:10px 0 6px}
 td{padding:10px 8px 10px 0;border-top:1px solid var(--line);vertical-align:top}.num{text-align:right;padding-right:0;font-variant-numeric:tabular-nums;white-space:nowrap}
 td small{display:inline-block;margin-left:6px;font-size:11px;color:var(--sub)}.lines{font-size:11.5px;color:var(--sub);margin-top:2px}
