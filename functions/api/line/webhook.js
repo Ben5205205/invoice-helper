@@ -290,11 +290,11 @@ async function handle(env, ev, origin) {
     return reply("好，這裡開始管人員：大家貼排班、貼工作表現不用 @我，我會自動記下來、貼排班卡；說「排班」「表現統計」「法會」隨時看。");
   }
   // ---- 群組個性（撩人女秘書）：每個群組預設開，Ben 可以關掉或再打開 ----
-  if (group && /^(開啟|打開|關閉|關掉)(秘書)?個性$/.test(sc)) {
+  if (group && /^(開啟|打開|關閉|關掉)(秘書|酒局|夜場)?個性$|^(輕佻|放開|正經)一點$/.test(sc)) {
     if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能設定。");
-    const off = /關/.test(sc);
-    await kv.set(db, "persona:" + chatId, off ? "off" : "charm");
-    return reply(off ? "好，這裡我就正經一點說話。" : "好呀～這裡我就放開一點了 😏");
+    const off = /關|正經/.test(sc), night = !off && /酒局|夜場|輕佻|放開/.test(sc);
+    await kv.set(db, "persona:" + chatId, off ? "off" : night ? "night" : "charm");
+    return reply(off ? "好，這裡我就正經一點說話。" : night ? "收到～這裡我就再放開一點 🥂" : "好呀～這裡照平常的我 😏");
   }
   // ---- 疏文法會名冊：開啟／關閉（只有管理員） ----
   if (group && /^(開啟|啟用|關閉|停用)名冊(功能)?$/.test(sc)) {

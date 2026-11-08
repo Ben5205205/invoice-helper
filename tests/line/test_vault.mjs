@@ -64,6 +64,11 @@ sq.prepare("INSERT INTO line_kv VALUES(?, 'off')").run("persona:" + G);
 await say(G, "U_ben", "再問一次", true);
 t(!/很懂撩人/.test(JSON.stringify(claudeBodies[0].system)), "persona off per group");
 sq.prepare("DELETE FROM line_kv WHERE k=?").run("persona:" + G);
+t(!/喝酒的群組/.test(JSON.stringify(claudeBodies[0].system)), "normal group not boozy");
+sq.prepare("INSERT INTO line_kv VALUES(?, '週五威士忌小酌群')").run("name:" + G);
+await say(G, "U_ben", "今晚喝什麼", true);
+t(/喝酒的群組/.test(JSON.stringify(claudeBodies[0].system)) && /不要硬講笑話/.test(JSON.stringify(claudeBodies[0].system)), "booze group: more playful, short");
+sq.prepare("DELETE FROM line_kv WHERE k=?").run("name:" + G);
 ms = await say(G, "U_ben", "沒叫它");
 t(!ms.length, "work group still needs @");
 // 3. 照片先不存、不回；說「存 標題」才存進同名資料夾，不用 AI 看照片
