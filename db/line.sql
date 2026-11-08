@@ -69,3 +69,4 @@ CREATE INDEX IF NOT EXISTS line_shifts_chat ON line_shifts(chat_id, date);
 CREATE TABLE IF NOT EXISTS line_perf (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, date TEXT NOT NULL, person TEXT NOT NULL, per_hour REAL, errors INTEGER, total INTEGER, hours REAL, note TEXT, status TEXT NOT NULL DEFAULT 'ok', batch TEXT, by TEXT, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS line_perf_chat ON line_perf(chat_id, date);
 CREATE TABLE IF NOT EXISTS line_roster_jobs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, user_id TEXT, sheet TEXT, gid TEXT, tab TEXT, config TEXT, plans TEXT, status TEXT NOT NULL, result TEXT, created INTEGER NOT NULL, updated INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS line_stores (id TEXT PRIMARY KEY, name TEXT NOT NULL, aliases TEXT, map TEXT, address TEXT, rules TEXT, notes TEXT, updated INTEGER NOT NULL, updated_by TEXT);
