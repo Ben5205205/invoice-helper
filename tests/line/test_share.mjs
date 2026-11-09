@@ -171,6 +171,15 @@ t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteTok
   sq.prepare("INSERT INTO line_kv(k,v) VALUES('liff:share','2000000000-abcdefgh')").run();
   sp = await get("share.js", "share?liff.state=" + encodeURIComponent("?s=" + s));
   t(sp.status === 200 && sp.html.includes("liff/edge") && sp.html.includes("shareTargetPicker"), "share page via LIFF state");
-  t((await S.shareLink(db, "https://taxtools.tw", "s=x")) === "https://liff.line.me/2000000000-abcdefgh?s=x", "share button opens LIFF");
+  t((await S.shareLink(db, "https://taxtools.tw", "s=x")) === "https://liff.line.me/2000000000-abcdefgh?s=x&lf=1", "share button opens LIFF");
+  // 在 LINE 裡打開：一般網址轉到 LIFF 一次；已經是 LIFF（lf=1 或 UA 有 LIFF）就不再轉，不會無限重複
+  sq.prepare("INSERT INTO line_kv(k,v) VALUES('liff:share','2000000000-abcdefgh') ON CONFLICT(k) DO UPDATE SET v=excluded.v").run();
+  const mod = await import(R + "/functions/split/share.js");
+  const hit = async (q, ua) => mod.onRequestGet({ request: new Request("https://taxtools.tw/split/share?" + q, { headers: { "user-agent": ua } }), env: { DB: db } });
+  t((await hit("s=" + s, "Mozilla/5.0 Line/14.1.0")).status === 302, "old link in LINE → LIFF once");
+  t((await hit("s=" + s + "&lf=1", "Mozilla/5.0 Line/14.1.0")).status === 200, "lf=1 → no redirect loop");
+  t((await mod.onRequestGet({ request: new Request("https://taxtools.tw/split/share?s=" + s, { headers: { "user-agent": "Line/14.1.0", cookie: "lfr=1" } }), env: { DB: db } })).status === 200, "just redirected (cookie) → no loop");
+  t((await hit("m=" + s + "," + s, "Mozilla/5.0 Line/14.1.0 LIFF")).status !== 302, "LIFF UA → no redirect loop");
+  sq.prepare("DELETE FROM line_kv WHERE k='liff:share'").run();
   sq.prepare("DELETE FROM line_kv WHERE k='liff:share'").run(); }
 console.log(`${ok} passed, ${bad} failed`);

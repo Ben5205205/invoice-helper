@@ -60,8 +60,11 @@ export async function onRequestGet({ request, env }) {
   if (st && !u.searchParams.get("s") && !u.searchParams.get("m")) { const q = new URLSearchParams(st.replace(/^[^?]*\?/, "")); for (const [k, v] of q) u.searchParams.set(k, v); }
   const s = u.searchParams.get("s") || "", liff = (await kv.get(env.DB, "liff:share")) || "";
   // 舊卡片的分享鈕（一般網址）在 LINE 裡打開：轉到 LINE 內嵌視窗，才能直接傳卡片
-  if (liff && !st && /\bLine\//i.test(request.headers.get("user-agent") || "") && (u.searchParams.get("s") || u.searchParams.get("m")))
-    return Response.redirect(`https://liff.line.me/${liff}?${u.searchParams.get("m") ? "m=" + u.searchParams.get("m") : "s=" + u.searchParams.get("s")}`, 302);
+  // （已經在 LINE 內嵌視窗裡的不轉：UA 有 LIFF，或網址帶 lf=1——不然會一直重複打開）
+  const ua = request.headers.get("user-agent") || "";
+  const recent = /(?:^|;\s*)lfr=1/.test(request.headers.get("cookie") || "");   // 剛轉過一次（1 分鐘內）就不再轉
+  if (liff && !st && !recent && !u.searchParams.get("lf") && /\bLine\//i.test(ua) && !/LIFF/i.test(ua) && (u.searchParams.get("s") || u.searchParams.get("m")))
+    return new Response(null, { status: 302, headers: { location: `https://liff.line.me/${liff}?${u.searchParams.get("m") ? "m=" + u.searchParams.get("m") : "s=" + u.searchParams.get("s")}&lf=1`, "set-cookie": "lfr=1; Max-Age=60; Path=/split; Secure; SameSite=Lax" } });
   // 合併請款單
   if (u.searchParams.get("m")) {
     const { rows, m } = await loadMany(env, u.searchParams.get("m"));
