@@ -35,4 +35,12 @@ const ow = await S.doneElsewhere(db, "C9", "6103 0012");
 t(ow && ow.id === "b1", "found in other group");
 const em = await S.elsewhereMessages(db, ow, "https://taxtools.tw"), ej = JSON.stringify(em);
 t(em.length === 2 && /已經拆好/.test(em[0].text) && ej.includes("/split/v?s=" + s) && !ej.includes("split?t=") && ej.includes("split/share?s="), "elsewhere card uses share links");
+// 在這群重新拆：只有 Ben；複製一份到這群（帶上次的人），給表單；同一群再按不會再複製
+t(JSON.stringify(em[1]).includes("sp:here:b1"), "here button on card");
+t(/只有 Ben/.test((await S.splitPostback({}, db, { chatId: "C9", data: "sp:here:b1", isAdmin: false, origin: "https://taxtools.tw" }))[0].text), "here: admin only");
+let hp = await S.splitPostback({}, db, { chatId: "C9", data: "sp:here:b1", isAdmin: true, origin: "https://taxtools.tw" });
+const cp = sq.prepare("SELECT * FROM line_splits WHERE chat_id='C9'").all();
+t(cp.length === 1 && cp[0].status === "ask" && JSON.parse(cp[0].data).guests.length === 3 && !JSON.parse(cp[0].data).payee && /帶好了/.test(hp[0].altText), "here: copied with guests, form " + JSON.stringify(hp).slice(0, 100));
+await S.splitPostback({}, db, { chatId: "C9", data: "sp:here:b1", isAdmin: true, origin: "https://taxtools.tw" });
+t(sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='C9'").get().n === 1, "here: no duplicate");
 console.log(`${ok} passed, ${bad} failed`);
