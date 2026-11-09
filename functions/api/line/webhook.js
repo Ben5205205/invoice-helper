@@ -4,7 +4,7 @@ import { vendorReply } from "../../../lib/orders.js";
 import { toBlocks } from "../../../lib/files.js";
 import { verifySignature, lineClient, quoting, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
 import { watchCommit, settleCommit } from "../../../lib/commit.js";
-import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat, elsewhereArrive, noteImage, markImage, settleDone, pickMessages } from "../../../lib/split.js";
+import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat, elsewhereArrive, noteImage, markImage, settleDone, pickMessages, quoteBill, billLabel, rememberQuote } from "../../../lib/split.js";
 import { chat, member, isGroup, kv, rid, rememberSent, quotedBot, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
 import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../../lib/books.js";
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
@@ -474,7 +474,8 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
   if (ex && (ex.status === "done" || Date.now() - ex.created > 15 * 60e3)) {
     await markImage(db, chatId, ev.message?.type === "image" ? ev.message.id : null, { k: "new" });
     const url = await formLink(db, origin, chatId, ex.id);
-    const m = ex.status === "done" ? redoMessages(ex, url) : askMessages(ex, null, false, url);
+    const qt = ev.message?.quoteToken;
+    const m = ex.status === "done" ? quoteBill(redoMessages(ex, url), qt, `${billLabel(ex.d)} 單已拆過帳，要重新拆嗎？`) : quoteBill(askMessages(ex, null, false, url), qt, `${billLabel(ex.d)} 單還沒拆完，請填表單`);
     return line.reply(ev.replyToken, m).catch(e => console.log("same bill reply failed", e.message));
   }
   // 別的群組已經拆好的單：直接貼結果卡，不再問要不要拆
@@ -484,7 +485,11 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
     // 3 秒內連貼好幾張別群拆好的單：等這批都判斷完，只回一次「合併／分開／重新修改」
     const st = await settleDone(db, chatId, mid, other.id);
     if (st.mode === "skip") return;
-    const em = st.mode === "group" ? await pickMessages(db, st.ids) : await elsewhereArrive(db, chatId, other, origin || other.d.origin || "");
+    const qt = ev.message?.quoteToken;
+    await rememberQuote(db, chatId, other.id, qt);
+    const pm = st.mode === "group" ? await pickMessages(db, st.ids) : null;
+    const em = pm ? quoteBill(pm, qt, pm[0].altText)
+      : quoteBill(await elsewhereArrive(db, chatId, other, origin || other.d.origin || ""), qt, `${billLabel(other.d)} 單已拆過`);
     return line.reply(ev.replyToken, em).catch(async e => { console.log("elsewhere reply failed, pushing", e.message); await line.push(chatId, em).then(() => recordPush(db, chatId, 1)).catch(() => {}); });
   }
   await markImage(db, chatId, mid, { k: "new" });
@@ -493,10 +498,12 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
   catch (e) { console.log("split failed", e.message); r = { error: "帳單讀取失敗，等一下再試一次。" }; }
   const ew = await elsewhereAfterRead(db, chatId, r, origin).catch(() => null);
   if (ew && !ew.length) return;   // 同時貼了好幾張：由最後一張回話
-  if (ew) return line.reply(ev.replyToken, ew).catch(async e => { console.log("elsewhere reply failed, pushing", e.message); await line.push(chatId, ew).then(() => recordPush(db, chatId, 1)).catch(() => {}); });
+  if (ew) { await rememberQuote(db, chatId, ew.otherId, ev.message?.quoteToken); const q = quoteBill(ew, ev.message?.quoteToken, ew.lead); return line.reply(ev.replyToken, q).catch(async e => { console.log("elsewhere reply failed, pushing", e.message); await line.push(chatId, q).then(() => recordPush(db, chatId, 1)).catch(() => {}); }); }
   const adm = await adminFor(env, db, chatId).catch(() => null);
   const formUrl = !r.error ? (await formLink(db, origin, chatId, r.split.id)) || null : null;
-  const msgs = r.error ? [textMessage(r.error)] : askMessages(r.split, adm?.inChat ? adm.id : null, r.merged, formUrl);
+  if (!r.error && !r.merged) await rememberQuote(db, chatId, r.split.id, ev.message?.quoteToken);
+  const msgs = r.error ? [textMessage(r.error)] : quoteBill(askMessages(r.split, adm?.inChat ? adm.id : null, r.merged, formUrl), ev.message?.quoteToken,
+    r.merged ? `${billLabel(r.split.d)} 第二張也讀進來了，要拆帳請填表單` : `${billLabel(r.split.d)} 單：要拆帳請填表單`);
   await line.reply(ev.replyToken, msgs).catch(async e => {
     console.log("bill reply failed, pushing", e.message);
     await line.push(chatId, msgs).then(() => recordPush(db, chatId, 1)).catch(e2 => console.log("bill push failed", e2.message));

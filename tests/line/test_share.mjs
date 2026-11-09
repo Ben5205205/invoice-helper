@@ -83,7 +83,7 @@ t((await S.settleDone(db, "C4", "j1", "b1")).mode === "solo", "burst mixed with 
 await S.noteImage(db, "C3", "k1", Date.now());
 t((await S.settleDone(db, "C3", "k1", "b1")).mode === "solo", "single image: solo");
 const pm = await S.pickMessages(db, ["b1", "b3"]), pj = JSON.stringify(pm);
-t(/都已經拆過帳/.test(pm[0].altText) && pj.includes("sp:pick:m:b1,b3") && pj.includes("sp:pick:s:b1,b3") && pj.includes("sp:pick:r:b1,b3"), "pick card 3 options");
+t(/都已拆過，要合併還是分開/.test(pm[0].altText) && pj.includes("sp:pick:m:b1,b3") && pj.includes("sp:pick:s:b1,b3") && pj.includes("sp:pick:r:b1,b3"), "pick card 3 options");
 let pr = await S.splitPostback({}, db, { chatId: "C5", data: "sp:pick:m:b1,b3", isAdmin: false, origin: "https://taxtools.tw" });
 const pmj = JSON.stringify(pr);
 t(pr.length === 1 && /合併/.test(pr[0].altText) && pmj.includes("split/share?m=") && pmj.includes('"label":"分享"'), "pick merge: combined card with share");
@@ -108,4 +108,13 @@ t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteTok
   t(!(await L.interrupted(db, "C2", ev)), "own message row ignored");
   sq.prepare("INSERT INTO line_msgs(chat_id,user_id,name,text,ts) VALUES('C2','U2','Jim','哈哈',?)").run(Date.now());
   t(await L.interrupted(db, "C2", ev), "someone talked in between: quote"); }
+// 講某張單的訊息一律引用原單：一行文字（引用）＋只有按鈕的小卡
+{ const q = S.quoteBill(one, "QT1", "威士登 10/30 單已拆過");
+  t(q.length === 2 && q[0].type === "text" && q[0].quoteToken === "QT1" && q[0].text === "威士登 10/30 單已拆過" && /sp:pick:s:b1/.test(JSON.stringify(q[1])) && !q[1].contents.footer, "quoted lead + button bar");
+  const q3 = S.quoteBill(pm, "QT2", pm[0].altText);
+  t(q3[0].quoteToken === "QT2" && (JSON.stringify(q3[1]).match(/"type":"button"/g) || []).length === 3, "pick: 3 buttons");
+  t(S.quoteBill(one, null, "x") === one, "no token: unchanged");
+  await S.rememberQuote(db, "C9", "b1", "QT9");
+  const cm = await S.cardMessages(db, { id: "b1", chat_id: "C9", d, result: JSON.stringify(res) });
+  t(cm[0].quoteToken === "QT9", "result card lead quotes the original photo"); }
 console.log(`${ok} passed, ${bad} failed`);
