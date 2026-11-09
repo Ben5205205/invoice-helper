@@ -2,10 +2,10 @@
 import { kv } from "../../lib/assistant.js";
 import { compute, fmt, combine, storeColor, storeColors } from "../../lib/split.js";
 
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+export const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // 店家配色：主色→深色的斜向漸層，點綴色給小字，右上角一個淡淡的浮水印字
-const heroStyle = n => { const c = storeColor(n); return `background:linear-gradient(135deg,${c.base},${c.deep});--accent:${c.accent};--deep:${c.deep}`; };
-const tw = ms => { const t = new Date(ms + 8 * 3600e3); return `${t.getUTCFullYear()}/${t.getUTCMonth() + 1}/${t.getUTCDate()}`; };
+export const heroStyle = n => { const c = storeColor(n); return `background:linear-gradient(135deg,${c.base},${c.deep});--accent:${c.accent};--deep:${c.deep}`; };
+export const tw = ms => { const t = new Date(ms + 8 * 3600e3); return `${t.getUTCFullYear()}/${t.getUTCMonth() + 1}/${t.getUTCDate()}`; };
 
 export async function onRequestGet({ request, env }) {
   const u = new URL(request.url), t = u.searchParams.get("t") || "", id = u.searchParams.get("id");
@@ -42,7 +42,7 @@ export async function onRequestGet({ request, env }) {
     <main>${list || `<div class="empty">還沒有拆過帳。</div>`}</main>`);
 }
 
-function detail(r, t, focus) {
+export function detail(r, t, focus, pub = false) {
   const d = JSON.parse(r.data || "{}"), res = r.result ? JSON.parse(r.result) : (d.guests?.length ? compute(d) : null);
   const nm = id => esc((d.guests || []).find(g => g.id === id)?.name || "未指定");
   const top = res && res.payers.length > 1 ? Math.max(...res.payers.map(x => x.total)) : null;
@@ -65,8 +65,8 @@ function detail(r, t, focus) {
   const hostess = (d.hostess || []).map(h => `<tr><td>${esc(h.name)}${h.mark ? `<small>${esc(h.mark)}</small>` : ""}<div class="lines">${h.lines.map(l => esc([l.type, l.time, l.units ? l.units + " 節" : ""].filter(Boolean).join(" "))).join("<br>")}</div></td><td>${h.split ? h.split.map(sg => (h.split.length > 1 ? sg.u + " 節：" : "") + sg.who.map(nm).join("、")).join("<br>") : nm(h.guest)}</td><td class="num">${fmt(h.amount)}</td></tr>`).join("");
   const shared = (d.shared || []).map(s => `<tr><td>${esc(s.name)}${s.qty > 1 ? `<small>${s.qty} × ${fmt(s.price)}</small>` : ""}</td><td>${s.who ? s.who.map(nm).join("、") : "全部平分"}</td><td class="num">${fmt(s.amount)}</td></tr>`).join("");
   const photos = [0, 1, 2, 3].map(n => `<a href="/split/img?t=${esc(t)}&id=${esc(r.id)}&n=${n}" target="_blank" class="ph" data-n="${n}"><img loading="lazy" src="/split/img?t=${esc(t)}&id=${esc(r.id)}&n=${n}" alt="帳單照片" onerror="this.parentNode.remove()"></a>`).join("");
-  return `
-    <header class="hero" style="${heroStyle(d.store)}"><span class="mark" aria-hidden="true">${esc(storeColor(d.store).mark)}</span><a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>
+  return `<style>:root{--brand:${storeColor(d.store).base}}</style>
+    <header class="hero" style="${heroStyle(d.store)}"><span class="mark" aria-hidden="true">${esc(storeColor(d.store).mark)}</span>${pub ? "" : `<a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>`}
       <div class="kicker">${r.status === "done" ? "請款單" : "拆帳中"}</div><h1>${esc(d.store || "帳單")}</h1>
       <div class="meta light">${esc(d.date || tw(r.created))}${d.bill_no ? "｜單號 " + esc(d.bill_no) : ""}</div>
       <div class="total"><span>現金總額</span><b>$${fmt(d.cash)}</b></div>${d.card ? `<div class="meta light">刷卡價格 $${fmt(d.card)}</div>` : ""}${d.payee ? `<div class="payto">請轉給 <b>${esc(d.payee)}</b></div>` : ""}</header>
@@ -74,9 +74,9 @@ function detail(r, t, focus) {
       ${payers ? `<h2>請款</h2><section class="card">${payers}</section>` : ""}
       ${people ? `<h2>每個人的明細</h2><section class="card people">${people}</section>` : ""}
       <h2>小姐代支</h2><section class="card"><table><thead><tr><th>小姐</th><th>客人</th><th class="num">金額</th></tr></thead><tbody>${hostess}</tbody></table></section>
-      <h2>公費</h2><section class="card"><table><thead><tr><th>項目</th><th>分攤</th><th class="num">金額</th></tr></thead><tbody>${shared}</tbody></table>
+      <h2>公帳分攤</h2><section class="card"><table><thead><tr><th>項目</th><th>分攤</th><th class="num">金額</th></tr></thead><tbody>${shared}</tbody></table>
         ${(d.free || []).length ? `<div class="free">招待：${(d.free || []).map(esc).join("、")}</div>` : ""}</section>
-      <h2>帳單照片</h2><section class="photos">${photos}</section>
+      ${pub ? "" : `<h2>帳單照片</h2><section class="photos">${photos}</section>`}
     </main>`;
 }
 
@@ -106,9 +106,9 @@ function combinedPage(bills, t, focus) {
     <main><h2>每個人（點開看每家店）</h2><section class="card people">${people}</section></main>`;
 }
 
-function page(title, body, status = 200) {
+export function page(title, body, status = 200, head = "") {
   return new Response(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>${esc(title)}</title><style>
+<meta name="robots" content="noindex"><title>${esc(title)}</title>${head}<style>
 :root{--brand:#12524F;--soft:#EEF2F1;--ink:#1F2937;--sub:#6B7280;--line:#E5E7EB;--bg:#F6F8F7;--card:#FFFFFF;--accent:#F28C28}
 @media (prefers-color-scheme:dark){:root{--soft:#1E2B2A;--ink:#E8EEED;--sub:#9AA8A6;--line:#2A3735;--bg:#0F1716;--card:#16201F}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif;-webkit-font-smoothing:antialiased}
