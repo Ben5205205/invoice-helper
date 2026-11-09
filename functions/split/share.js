@@ -59,6 +59,9 @@ export async function onRequestGet({ request, env }) {
   const st = u.searchParams.get("liff.state");
   if (st && !u.searchParams.get("s") && !u.searchParams.get("m")) { const q = new URLSearchParams(st.replace(/^[^?]*\?/, "")); for (const [k, v] of q) u.searchParams.set(k, v); }
   const s = u.searchParams.get("s") || "", liff = (await kv.get(env.DB, "liff:share")) || "";
+  // 舊卡片的分享鈕（一般網址）在 LINE 裡打開：轉到 LINE 內嵌視窗，才能直接傳卡片
+  if (liff && !st && /\bLine\//i.test(request.headers.get("user-agent") || "") && (u.searchParams.get("s") || u.searchParams.get("m")))
+    return Response.redirect(`https://liff.line.me/${liff}?${u.searchParams.get("m") ? "m=" + u.searchParams.get("m") : "s=" + u.searchParams.get("s")}`, 302);
   // 合併請款單
   if (u.searchParams.get("m")) {
     const { rows, m } = await loadMany(env, u.searchParams.get("m"));
