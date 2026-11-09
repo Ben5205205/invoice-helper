@@ -57,4 +57,10 @@ t(/合併請款單（2 張）/.test(html) && /id="p-王小明" open/.test(html) 
   const cc = JSON.stringify(ctx.cards);
   t(/請轉給 陳大華：共 \$17,000（陳大華 自己的 10,000 不用轉）/.test(cc) && /陳大華（收款人，自己的不用轉）/.test(cc), "card shows collect total");
 }
+// 4. 現在的做法：貼第二張卡時問「要跟今天前面的單合併嗎？」，不再自動附合併卡；更正卡不問
+sq.prepare("UPDATE line_splits SET data=json_set(data,'$.cardAt',?) WHERE id='b1'").run(Date.now() - 60e3);
+const rc = await S.replyCard(db, { id: "b2" });
+t(rc.some(m => /合併嗎/.test(m.altText || "")) && !rc.some(m => /合併請款單/.test(m.altText || "")) && JSON.stringify(rc).includes("sp:cmb:b1,b2"), "second card asks to merge " + rc.map(m => m.altText || m.text).join(" / "));
+const tb = await S.todayBills(db, G);
+t(tb.map(x => x.id).join() === "b1,b2", "today bills");
 console.log(`${ok} passed, ${bad} failed`);
