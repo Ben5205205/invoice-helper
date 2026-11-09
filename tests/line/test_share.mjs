@@ -117,4 +117,9 @@ t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteTok
   await S.rememberQuote(db, "C9", "b1", "QT9");
   const cm = await S.cardMessages(db, { id: "b1", chat_id: "C9", d, result: JSON.stringify(res) });
   t(cm[0].quoteToken === "QT9", "result card lead quotes the original photo"); }
+// 日期一定要有：讀不到就從單號推，推不出來用今天（早上 6 點前算前一天）
+{ const n = Date.UTC(2026, 10, 9, 4);
+  t(S.billDate("61106022-13012", n) === "11/6" && S.billDate("61030012", n) === "10/30" && S.billDate("1106015-530008", n) === "11/6" && S.billDate("610210091", n) === "10/21", "date from bill no");
+  t(S.billDate("ABC", n) === "11/9" && S.billDate("", Date.UTC(2026, 10, 8, 20)) === "11/8", "fallback today (before 6am = previous night)");
+  t(S.billLabel({ store: "威思汀", bill_no: "61106022" }) === "威思汀 11/6", "label always has date"); }
 console.log(`${ok} passed, ${bad} failed`);
