@@ -4,7 +4,7 @@ import { vendorReply } from "../../../lib/orders.js";
 import { toBlocks } from "../../../lib/files.js";
 import { verifySignature, lineClient, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
 import { watchCommit, settleCommit } from "../../../lib/commit.js";
-import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead } from "../../../lib/split.js";
+import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat } from "../../../lib/split.js";
 import { chat, member, isGroup, kv, rid, rememberSent, quotedBot, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
 import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../../lib/books.js";
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
@@ -234,6 +234,7 @@ async function handle(env, ev, origin) {
   if (/^(說明|help|怎麼用|使用說明|你會什麼|你會做什麼|功能|\?|？)$/i.test(c))
     return ev.replyToken ? line.reply(ev.replyToken, [helpCard(group, { keepDays: KEEP_DAYS, split: group && (await splitOn(db, chatId)) })]).catch(() => reply(group ? HELP_GROUP : HELP_USER)) : null;
   if (/^(店家(清單|列表|資料)|所有店家|有哪些店[?？]?)$/.test(c)) return reply(await storeListText(db));
+  if (combineCmd(c) && ev.replyToken) { const cc = await combinedForChat(db, chatId, origin).catch(() => null); if (cc) return line.reply(ev.replyToken, [cc]).catch(e => console.log("combine", e.message)); }
   if (rankCmd(c) && ev.replyToken) return line.reply(ev.replyToken, await rankMessages(db, { chatId, all: !group && (await isAdmin(db, userId)), which: rankCmd(c) })).catch(e => console.log("rank", e.message));
   if (/^(待辦(清單|事項)?|有哪些待辦[?？]?)$/.test(c)) return reply(await todoText(db, chatId), await todoChips(db, chatId));
   if (/^完成\s*[0-9a-f]{4}/i.test(c)) return reply(await completeByText(db, chatId, c));
@@ -469,7 +470,7 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
   }
   // 別的群組已經拆好的單：直接貼結果卡，不再問要不要拆
   const other = ex ? null : await doneElsewhere(db, chatId, billNo).catch(() => null);
-  if (other) return line.reply(ev.replyToken, await elsewhereMessages(db, other, origin || other.d.origin || "")).catch(e => console.log("elsewhere reply failed", e.message));
+  if (other) return line.reply(ev.replyToken, await elsewhereMessages(db, other, origin || other.d.origin || "", chatId)).catch(e => console.log("elsewhere reply failed", e.message));
   let r;
   try { r = await startSplit(env, db, { chatId, userId, imgs, billNo }); }
   catch (e) { console.log("split failed", e.message); r = { error: "帳單讀取失敗，等一下再試一次。" }; }

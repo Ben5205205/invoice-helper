@@ -1,7 +1,7 @@
 // GET /split/v?s=<分享代碼>[&p=<付款人>] — 分享出去的請款單（只有這一張；沒有群組名稱、其他帳單、帳單照片）
 //   沒有 p：整張單　有 p：只有這個人（和併給他的人）的那份
 import { fmt, storeColor } from "../../lib/split.js";
-import { esc, heroStyle, page, detail } from "./index.js";
+import { esc, heroStyle, page, detail, combinedPage } from "./index.js";
 import { load } from "./share.js";
 
 const OG = { "#6B3657": "xiangge", "#1E3A5F": "focus", "#7E2632": "shimeng", "#1D6A6E": "westin", "#7A4E1D": "weishideng" };
@@ -11,6 +11,16 @@ const ogHead = (u, store, title, desc) => `<meta property="og:type" content="web
 
 export async function onRequestGet({ request, env }) {
   const u = new URL(request.url), s = u.searchParams.get("s") || "", pid = u.searchParams.get("p");
+  // 合併請款單：?m=代碼1,代碼2（每張都是單張分享代碼）
+  const m = (u.searchParams.get("m") || "").split(",").filter(x => /^\w{20,30}$/.test(x)).slice(0, 8);
+  if (m.length > 1) {
+    const rows = [], tok = {};
+    for (const x of m) { const r = await load(env, x); if (r) { rows.push(r); tok[r.id] = x; } }
+    if (rows.length < 2) return page("找不到", `<div class="empty">連結不對或已失效。</div>`, 404);
+    const title = rows.map(r => r.d.store || "帳單").join("＋");
+    return page(`合併請款單｜${title}`, combinedPage(rows, "", pid, id => `/split/v?s=${tok[id]}`), 200,
+      ogHead(u, rows[0].d.store, `合併請款單｜${title}`, `${rows.length} 張單合計 $${fmt(rows.reduce((a, r) => a + r.res.total, 0))}`));
+  }
   const r = await load(env, s);
   if (!r) return page("找不到", `<div class="empty">連結不對或已失效。</div>`, 404);
   const { d, res } = r, title = [d.store, d.date].filter(Boolean).join(" ") || "帳單", c = storeColor(d.store);

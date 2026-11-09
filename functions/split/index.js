@@ -80,7 +80,8 @@ export function detail(r, t, focus, pub = false) {
     </main>`;
 }
 
-function combinedPage(bills, t, focus) {
+export function combinedPage(bills, t, focus, billHref = null) {
+  const href = billHref || (id => `?t=${esc(t)}&id=${esc(id)}`);
   const c = combine(bills), pal = storeColors(bills.map(b => b.d.store || "帳單")), storeColor = n => pal[n || "帳單"] || pal[n];
   const people = c.people.map(p => {
     const vip = c.top !== null && p.total === c.top && c.top > 0;
@@ -92,14 +93,14 @@ function combinedPage(bills, t, focus) {
       const hi = items.filter(i => i.name.startsWith("小姐｜")), si = items.filter(i => !i.name.startsWith("小姐｜"));
       const li = arr => arr.map(i => `<li><span>${esc(i.name.replace(/^小姐｜/, ""))}${i.who ? `<em>${esc(i.who)}</em>` : ""}</span><span>${fmt(i.amount)}</span></li>`).join("");
       const sc = storeColor(s.store);
-      return `<li class="store" style="color:${sc.base};background:${sc.tint};border-left:4px solid ${sc.base}"><span>${esc(s.store)}<a href="?t=${esc(t)}&id=${esc(s.id)}">整張 ›</a></span><span>${fmt(s.total)}</span></li>
+      return `<li class="store" style="color:${sc.base};background:${sc.tint};border-left:4px solid ${sc.base}"><span>${esc(s.store)}<a href="${href(s.id)}">整張 ›</a></span><span>${fmt(s.total)}</span></li>
         ${hi.length ? `<li class="grp"><span>小姐</span><span>${fmt(s.hostess)}</span></li>${li(hi)}` : ""}
         ${si.length ? `<li class="grp"><span>公帳分攤</span><span>${fmt(s.shared)}</span></li>${li(si)}` : ""}`;
     }).join("");
     return `<details id="p-${esc(p.name)}"${focus === p.name ? ' open class="focus"' : ""}><summary><span>${vip ? '<i class="badge">👑 恩客NO.1 ✨</i>' : ""}${esc(p.name)}</span><b>$${fmt(p.total)}</b></summary><ul>${stores}</ul></details>`;
   }).join("");
   return `
-    <header class="hero"><a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>
+    <header class="hero">${billHref ? "" : `<a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>`}
       <div class="kicker">合併請款單（${bills.length} 張）</div><h1>${bills.map(b => esc(b.d.store || "帳單")).join("＋")}</h1>
       <div class="storechips">${bills.map(b => { const sc = storeColor(b.d.store); return `<span style="background:${sc.tint};color:${sc.base}">${esc(b.d.store || "帳單")} $${fmt(b.res.total)}</span>`; }).join("")}</div>
       <div class="total"><span>合計</span><b>$${fmt(c.total)}</b></div></header>

@@ -49,4 +49,17 @@ sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data) VALU
 const ar = await S.elsewhereAfterRead(db, "C8", { split: { id: "n1", d: { bill_no: "6103 0012" } } }, "https://taxtools.tw");
 t(ar && /已經拆好/.test(ar[0].text) && sq.prepare("SELECT status FROM line_splits WHERE id='n1'").get().status === "cancelled", "after read: cancel + result card");
 t(!(await S.elsewhereAfterRead(db, "C8", { merged: true, split: { id: "n1", d: { bill_no: "61030012" } } }, "")), "merged second photo untouched");
+// 別群拆好的兩張連續貼：第二張附合併請款單（公開連結）；說「兩張合併」也叫得出來
+sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data,result,done_at) VALUES('b3','C1','88880001',?, 'done', ?, ?, ?)").run(Date.now(), JSON.stringify({ ...d, store: "世盟", bill_no: "88880001" }), JSON.stringify(res), Date.now());
+const e1 = await S.elsewhereMessages(db, await S.doneElsewhere(db, "C7", "61030012"), "https://taxtools.tw", "C7");
+t(e1.length === 2, "first shown: no combined");
+const e2 = await S.elsewhereMessages(db, await S.doneElsewhere(db, "C7", "88880001"), "https://taxtools.tw", "C7");
+const cj = JSON.stringify(e2[2] || {});
+t(e2.length === 3 && /合併/.test(e2[2].altText) && cj.includes("/split/v?m=") && !cj.includes("split?t="), "second shown: combined card with public link " + (e2[2]?.altText || ""));
+const cc = await S.combinedForChat(db, "C7", "https://taxtools.tw");
+t(cc && /合併/.test(cc.altText), "combine on demand");
+t(S.combineCmd("兩張合併") && S.combineCmd("合併") && S.combineCmd("幫我把這兩張單合併") && !S.combineCmd("合併報表要怎麼做"), "combine command");
+const mtok = cj.match(/v\?m=([\w,]+)/)[1];
+r = await get("v.js", "v?m=" + mtok);
+t(r.status === 200 && /合併請款單/.test(r.html) && r.html.includes("世盟") && !r.html.includes("所有帳單") && r.html.includes("/split/v?s="), "public combined page");
 console.log(`${ok} passed, ${bad} failed`);
