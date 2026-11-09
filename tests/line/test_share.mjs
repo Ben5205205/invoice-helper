@@ -159,4 +159,18 @@ t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteTok
   t(S.combine([{ id: "a", d: { bill_no: "123456" }, res, done_at: 1 }, { id: "b", d: { bill_no: "12-3456" }, res: res2, done_at: 2 }]).total === res2.total, "combine() guard keeps newest");
   const rd = await S.splitPostback({}, db, { chatId: "CY", data: "sp:pick:r:o1", isAdmin: true, origin: "https://taxtools.tw" });
   t(sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='CY'").get().n === 1 && /已經拆過帳/.test(rd[0].altText), "re-split again: reuse this group's copy " + rd[0].altText); }
+// 直接分享卡片：/split/card 給整張卡或個人小卡（只有網址按鈕）；有設定 LINE 內嵌視窗時分享鈕從 LINE 打開
+{ let r1 = await get("card.js", "card?s=" + s);
+  const j1 = JSON.parse(r1.html);
+  t(j1.messages?.length === 1 && /請款單/.test(j1.messages[0].altText) && !JSON.stringify(j1).includes("postback") && JSON.stringify(j1).includes("/split/v?s=" + s), "share card: whole, uri only");
+  r1 = await get("card.js", "card?s=" + s + "&p=g1"); const j2 = JSON.parse(r1.html);
+  t(/Jim 的請款單/.test(j2.messages[0].altText) && JSON.stringify(j2).includes("&p=g1") && !JSON.stringify(j2).includes("Ben"), "share card: person only");
+  t((await get("card.js", "card?s=bogusbogusbogusbogus99")).status === 404, "share card: bad token");
+  let sp = await get("share.js", "share?s=" + s);
+  t(sp.html.includes('data-q="s=' + s + '"') && !sp.html.includes("liff/edge"), "share page: no LIFF configured → link fallback");
+  sq.prepare("INSERT INTO line_kv(k,v) VALUES('liff:share','2000000000-abcdefgh')").run();
+  sp = await get("share.js", "share?liff.state=" + encodeURIComponent("?s=" + s));
+  t(sp.status === 200 && sp.html.includes("liff/edge") && sp.html.includes("shareTargetPicker"), "share page via LIFF state");
+  t((await S.shareLink(db, "https://taxtools.tw", "s=x")) === "https://liff.line.me/2000000000-abcdefgh?s=x", "share button opens LIFF");
+  sq.prepare("DELETE FROM line_kv WHERE k='liff:share'").run(); }
 console.log(`${ok} passed, ${bad} failed`);
