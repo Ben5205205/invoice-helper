@@ -473,15 +473,16 @@ async function handle(env, ev, origin) {
 async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin) {
   // 同一張單又貼一次：拆過了→問要不要重新拆；拆到一半（超過 15 分鐘，不是補第二張）→再給表單。都不重讀帳單
   const ex = await sameBill(db, chatId, billNo).catch(() => null);
-  if (ex && (ex.status === "done" || Date.now() - ex.created > 15 * 60e3)) {
+  // 這群拆到一半的單又貼一次（超過 15 分鐘，不是補第二張）：再給表單
+  if (ex && ex.status !== "done" && Date.now() - ex.created > 15 * 60e3) {
     await flushBurst(db, line, chatId, ev.message?.type === "image" ? ev.message.id : null, { k: "new" }, origin);
     const url = await formLink(db, origin, chatId, ex.id);
     const qt = ev.message?.quoteToken;
     const m = ex.status === "done" ? quoteBill(redoMessages(ex, url), qt, `${billLabel(ex.d)} 單已拆過帳，要重新拆嗎？`) : quoteBill(askMessages(ex, null, false, url), qt, `${billLabel(ex.d)} 單還沒拆完，請填表單`);
     return line.reply(ev.replyToken, m).catch(e => console.log("same bill reply failed", e.message));
   }
-  // 別的群組已經拆好的單：直接貼結果卡，不再問要不要拆
-  const other = ex ? null : await doneElsewhere(db, chatId, billNo).catch(() => null);
+  // 已經拆好的單（這群拆過的，或別的群組拆好的）：一樣處理，同時貼好幾張就一起問合併／分開／重新修改
+  const other = ex?.status === "done" ? ex : ex ? null : await doneElsewhere(db, chatId, billNo).catch(() => null);
   const mid = ev.message?.type === "image" ? ev.message.id : null;
   if (other) {
     // 同一批貼了好幾張：最後判斷完的那張一起回（2 張以上問合併／分開／重新修改）

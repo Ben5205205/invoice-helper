@@ -217,7 +217,7 @@ sq.prepare("UPDATE line_kv SET v='1' WHERE k='split:on:Cbar'").run();
 sq.prepare("UPDATE line_splits SET status='done' WHERE chat_id='Cbar'").run();
 isBill = true; claudeCalls.length = 0;
 await photo("U_andy", "p20");
-{ const m = replies(); t(/已經拆過帳了/.test(m[0]?.altText || "") && JSON.stringify(m).includes("重新拆帳") && JSON.stringify(m).includes("sp:post:") && !claudeCalls.some(c => /^read:/.test(c)), "repost done bill → redo prompt, no re-read " + JSON.stringify(m).slice(0, 120)); }
+{ const m = replies(); t(/單已拆過$/.test(m[0]?.altText || "") && JSON.stringify(m).includes("重新拆") && JSON.stringify(m).includes("sp:pick:s:") && !claudeCalls.some(c => /^read:/.test(c)), "repost done bill → 單已拆過 + buttons, no re-read " + JSON.stringify(m).slice(0, 120)); }
 await send({ type: "postback", source: { type: "group", groupId: G, userId: "U_ben" }, postback: { data: "split:no" } });
 t(!replies().length, "不用 → quiet");
 calls.length = 0;
