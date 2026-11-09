@@ -47,13 +47,13 @@ t(sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='C9'").get().n ==
 t((await S.doneElsewhere(db, "C8", "61030012-")).id === "b1" && (await S.doneElsewhere(db, "C8", "61030012[002-1]")).id === "b1", "bill no normalized");
 sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data) VALUES('n1','C8','61030012',?, 'ask', ?)").run(Date.now(), JSON.stringify({ bill_no: "61030012" }));
 const ar = await S.elsewhereAfterRead(db, "C8", { split: { id: "n1", d: { bill_no: "6103 0012" } } }, "https://taxtools.tw");
-t(ar && /的單已經拆過了/.test(ar[0].text) && sq.prepare("SELECT status FROM line_splits WHERE id='n1'").get().status === "cancelled", "after read: cancel + result card");
+t(ar && /單已拆過/.test(ar[0].altText) && sq.prepare("SELECT status FROM line_splits WHERE id='n1'").get().status === "cancelled", "after read: cancel + result card");
 t(!(await S.elsewhereAfterRead(db, "C8", { merged: true, split: { id: "n1", d: { bill_no: "61030012" } } }, "")), "merged second photo untouched");
 // 別群拆好的單：直接出卡；同一天這群已經有別張單，就加問「要跟前面的單合併嗎？」；合併＝合併請款單、不用＝一句話
 sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data,result,done_at) VALUES('b3','C1','88880001',?, 'done', ?, ?, ?)").run(Date.now(), JSON.stringify({ ...d, store: "世盟", bill_no: "88880001" }), JSON.stringify(res), Date.now());
 const one = await S.elsewhereArrive(db, "C7", await S.doneElsewhere(db, "C7", "61030012"), "https://taxtools.tw");
 const oj = JSON.stringify(one);
-t(one.length === 2 && /^威士登 10\/30 的單已經拆過了，要重新拆，還是貼出拆好的單？$/.test(one[0].text) && oj.includes("sp:pick:s:b1") && oj.includes("sp:pick:r:b1"), "elsewhere: ask with store name " + one[0].text);
+t(one.length === 1 && one[0].altText === "威士登 10/30 單已拆過" && oj.includes("sp:pick:s:b1") && oj.includes("sp:pick:r:b1"), "elsewhere: one short card with buttons " + one[0].altText);
 const p1 = await S.splitPostback({}, db, { chatId: "C7", data: "sp:pick:s:b1", isAdmin: false, origin: "https://taxtools.tw" });
 t(p1.length === 1 && /請款單/.test(p1[0].altText), "post the done card (first today: no merge ask)");
 await S.elsewhereArrive(db, "C7", await S.doneElsewhere(db, "C7", "88880001"), "https://taxtools.tw");
