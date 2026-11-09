@@ -105,6 +105,18 @@ calls = []; await S.staffTick(env, db, L, at(add(d1, -1), 18)); t(!calls.some(c 
 calls = []; await S.staffTick(env, db, L, at(add(d1, -1), 9));
 p = calls.filter(c => c.url.endsWith("/message/push"));
 t(p.length === 1 && /還沒排滿/.test(p[0].body.messages[0].text) && p[0].body.messages[0].substitution?.m0?.mentionee?.userId === "U_ben", "shortage alert @Ben");
+// 老闆說「都有人了」：staff_ok 標起來，09:00 不再提醒那天、排班卡顯示已確認；undo 又會提醒
+{ const ch = (await db.prepare("SELECT substr(k,10) id FROM line_kv WHERE k LIKE 'staff:on:%'").first()).id;
+  const lackDays = async () => { calls = []; sq.prepare("DELETE FROM line_kv WHERE k LIKE 'staff:short:%'").run(); await S.staffTick(env, db, L, at(add(d1, -1), 9)); const m = calls.find(c => c.url.endsWith("/message/push")); return m ? m.body.messages[0].text : ""; };
+  const before = await lackDays();
+  const days = [...before.matchAll(/・(\d+)\/(\d+)（.）(\S+) 還缺/g)].map(x => x[3]);
+  for (const n of [0, 1, 2, 3]) await S.runStaffTool({ db, chatId: ch }, "staff_ok", { date: add(d1, n), role: "all" });
+  t(before && !(await lackDays()), "staff_ok silences shortage alert " + before);
+  const card = JSON.stringify(await S.rosterCard(db, ch, add(d1, -1)));
+  t(/人手已確認/.test(card) && (card.match(/還缺/g) || []).length === 1, "roster card shows confirmed (only the later rite still short)");
+  await S.runStaffTool({ db, chatId: ch }, "staff_ok", { date: d1, role: "all", undo: true });
+  t(/還缺/.test(await lackDays()), "undo brings alert back");
+  sq.prepare("DELETE FROM line_kv WHERE k LIKE 'staff:ok:%'").run(); sq.prepare("DELETE FROM line_kv WHERE k LIKE 'staff:short:%'").run(); }
 // 隔天不是法會工作日：18:00 不提醒；法會 3 天前以外：09:00 不提醒缺人
 calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 18)); t(!calls.some(c => c.url.endsWith("/message/push")), "no evening reminder on non-work day");
 calls = []; await S.staffTick(env, db, L, at(add(R1, -8), 9)); t(!calls.some(c => c.url.endsWith("/message/push")), "no shortage alert more than 3 days out");
