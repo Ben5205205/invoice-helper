@@ -1,6 +1,6 @@
 /* Shared sign-in helpers for 報稅帳本, /join/ and /firm/: Google Identity Services button, API calls with our session cookie. */
 window.TT_AUTH=(function(){
-  const GOOGLE_CLIENT_ID="1066981930870-e9u1ju6mnqmrtocmat5ullg6dtpcodkv.apps.googleusercontent.com";
+  const GOOGLE_CLIENT_ID="274898564862-rhf583t5bqfsvcsv1mn5pnue5a5829vp.apps.googleusercontent.com";
   const ready=!/^PENDING/.test(GOOGLE_CLIENT_ID);
   const api=(p,body)=>fetch(p,{method:body?"POST":"GET",headers:body?{"content-type":"application/json","x-tt":"1"}:{},body:body?JSON.stringify(body):undefined,credentials:"same-origin"})
     .catch(()=>{ throw new Error("連線失敗，請檢查網路後再試一次"); })
