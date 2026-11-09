@@ -143,4 +143,20 @@ t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteTok
     shared: [{ id: "s0", name: "包廂", amount: 3200, who: ["g0", "g1", "g2"] }, { id: "s1", name: "房間", amount: 5000, who: ["g1"] }, { id: "s2", name: "女客", amount: 1000, who: ["g1"] }] };
   const rr = S.compute(dd), b = rr.people.find(p => p.name === "B");
   t(b.items.find(x => x.name === "房間").amount === 5000 && b.items.find(x => x.name === "女客").amount === 1000 && rr.people.every(p => p.items.reduce((a, x) => a + x.amount, 0) === p.total) && rr.total === 9200, "single-payer items exact " + JSON.stringify(b.items)); }
+// 防呆：同一張單（別群原本的＋這群重拆的新版）合併只算一次、用新版
+{ const now = Date.now();
+  sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data,result,done_at) VALUES('o1','CX','1106015-530008',?, 'done', ?, ?, ?)").run(now - 9e5, JSON.stringify({ ...d, store: "世盟", bill_no: "1106015-530008" }), JSON.stringify(res), now - 9e5);
+  sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data,result,done_at) VALUES('o2','CX','61106022',?, 'done', ?, ?, ?)").run(now - 9e5, JSON.stringify({ ...d, store: "威思汀", bill_no: "61106022" }), JSON.stringify(res), now - 9e5);
+  await S.recordShown(db, "CY", "o1"); await S.recordShown(db, "CY", "o2");
+  const res2 = { ...res, total: res.total - 100 };
+  sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data,result,done_at) VALUES('n9','CY','1106015 530008',?, 'done', ?, ?, ?)").run(now, JSON.stringify({ ...d, store: "世盟", bill_no: "1106015 530008", cardAt: now, from: "o1" }), JSON.stringify(res2), now);
+  const tb2 = await S.todayBills(db, "CY");
+  t(tb2.map(x => x.id).sort().join() === "n9,o2", "today bills: edited copy replaces original " + tb2.map(x => x.id));
+  const cc2 = await S.combinedForChat(db, "CY", "https://taxtools.tw");
+  t(/世盟＋威思汀|威思汀＋世盟/.test(JSON.stringify(cc2)) && !/世盟＋威思汀＋世盟/.test(JSON.stringify(cc2)), "combined: no duplicate store");
+  const viaIds = await S.splitPostback({}, db, { chatId: "CY", data: "sp:cmb:o1,o2,n9", isAdmin: false, origin: "https://taxtools.tw" });
+  t(!/世盟＋威思汀＋世盟/.test(JSON.stringify(viaIds)), "combine by ids: duplicate dropped");
+  t(S.combine([{ id: "a", d: { bill_no: "123456" }, res, done_at: 1 }, { id: "b", d: { bill_no: "12-3456" }, res: res2, done_at: 2 }]).total === res2.total, "combine() guard keeps newest");
+  const rd = await S.splitPostback({}, db, { chatId: "CY", data: "sp:pick:r:o1", isAdmin: true, origin: "https://taxtools.tw" });
+  t(sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='CY'").get().n === 1 && /已經拆過帳/.test(rd[0].altText), "re-split again: reuse this group's copy " + rd[0].altText); }
 console.log(`${ok} passed, ${bad} failed`);
