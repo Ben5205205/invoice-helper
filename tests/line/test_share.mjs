@@ -138,4 +138,9 @@ t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteTok
   t(S.billDate("61106022-13012", n) === "11/6" && S.billDate("61030012", n) === "10/30" && S.billDate("1106015-530008", n) === "11/6" && S.billDate("610210091", n) === "10/21", "date from bill no");
   t(S.billDate("ABC", n) === "11/9" && S.billDate("", Date.UTC(2026, 10, 8, 20)) === "11/8", "fallback today (before 6am = previous night)");
   t(S.billLabel({ store: "威思汀", bill_no: "61106022" }) === "威思汀 11/6", "label always has date"); }
+// 一個人自己付的項目，明細金額跟帳單上一模一樣；被分攤的才有差 1 元的取整
+{ const dd = { guests: [{ id: "g0", name: "A" }, { id: "g1", name: "B" }, { id: "g2", name: "C" }], merge: {}, hostess: [],
+    shared: [{ id: "s0", name: "包廂", amount: 3200, who: ["g0", "g1", "g2"] }, { id: "s1", name: "房間", amount: 5000, who: ["g1"] }, { id: "s2", name: "女客", amount: 1000, who: ["g1"] }] };
+  const rr = S.compute(dd), b = rr.people.find(p => p.name === "B");
+  t(b.items.find(x => x.name === "房間").amount === 5000 && b.items.find(x => x.name === "女客").amount === 1000 && rr.people.every(p => p.items.reduce((a, x) => a + x.amount, 0) === p.total) && rr.total === 9200, "single-payer items exact " + JSON.stringify(b.items)); }
 console.log(`${ok} passed, ${bad} failed`);
