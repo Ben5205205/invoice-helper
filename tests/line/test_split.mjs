@@ -40,6 +40,7 @@ globalThis.fetch = async (url, init = {}) => {
 const env = { DB: db, LINE_CHANNEL_TOKEN: "t", LINE_CHANNEL_SECRET: "s", ANTHROPIC_API_KEY: "k" };
 const wh = await import(R + "/functions/api/line/webhook.js");
 const S = await import(R + "/lib/split.js");
+S.ARRIVE.wait = 0;
 const G = "Cbar";
 sq.prepare("INSERT INTO line_kv VALUES('name:Cbar','應酬群')").run(); sq.prepare(`INSERT INTO line_kv VALUES('admins','["U_ben"]')`).run();
 let n = 0;

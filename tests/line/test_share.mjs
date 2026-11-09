@@ -6,6 +6,7 @@ const sq = new DatabaseSync(":memory:"); sq.exec(readFileSync(R + "/db/line.sql"
 const db = { prepare(q) { const st = sq.prepare(q); let a = []; const o = { bind(...x) { a = x.map(v => v === undefined ? null : v); return o; },
   async first() { return st.get(...a) ?? null; }, async all() { return { results: st.all(...a) }; }, async run() { st.run(...a); return {}; } }; return o; } };
 const S = await import(R + "/lib/split.js");
+S.ARRIVE.wait = 0;
 let ok = 0, bad = 0; const t = (c, m) => { if (c) ok++; else { bad++; console.log("FAIL", m); } };
 const d = { store: "威士登", date: "10/30", cash: 10000, origin: "https://taxtools.tw", payee: "Jim",
   hostess: [{ id: "h0", name: "草莓", lines: [], amount: 6000, guest: "g0" }], shared: [{ id: "s0", name: "包廂", qty: 1, price: 4000, amount: 4000, who: null }],
@@ -49,13 +50,21 @@ sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data) VALU
 const ar = await S.elsewhereAfterRead(db, "C8", { split: { id: "n1", d: { bill_no: "6103 0012" } } }, "https://taxtools.tw");
 t(ar && /已經拆好/.test(ar[0].text) && sq.prepare("SELECT status FROM line_splits WHERE id='n1'").get().status === "cancelled", "after read: cancel + result card");
 t(!(await S.elsewhereAfterRead(db, "C8", { merged: true, split: { id: "n1", d: { bill_no: "61030012" } } }, "")), "merged second photo untouched");
-// 別群拆好的兩張連續貼：第二張附合併請款單（公開連結）；說「兩張合併」也叫得出來
+// 同時貼兩張別群拆好的單：第一張先不回（等下一張），最後一張回「合併還是分開」；合併＝兩張卡＋合併卡、分開＝兩張卡
 sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data,result,done_at) VALUES('b3','C1','88880001',?, 'done', ?, ?, ?)").run(Date.now(), JSON.stringify({ ...d, store: "世盟", bill_no: "88880001" }), JSON.stringify(res), Date.now());
-const e1 = await S.elsewhereMessages(db, await S.doneElsewhere(db, "C7", "61030012"), "https://taxtools.tw", "C7");
-t(e1.length === 2, "first shown: no combined");
-const e2 = await S.elsewhereMessages(db, await S.doneElsewhere(db, "C7", "88880001"), "https://taxtools.tw", "C7");
-const cj = JSON.stringify(e2[2] || {});
-t(e2.length === 3 && /合併/.test(e2[2].altText) && cj.includes("/split/v?m=") && !cj.includes("split?t="), "second shown: combined card with public link " + (e2[2]?.altText || ""));
+const one = await S.elsewhereArrive(db, "C6", await S.doneElsewhere(db, "C6", "61030012"), "https://taxtools.tw");
+t(one.length === 2 && /已經拆好/.test(one[0].text), "single bill: card right away");
+sq.prepare("INSERT INTO line_kv(k,v) VALUES('split:incoming:C7', ?)").run(JSON.stringify([{ id: "x9", ts: Date.now() + 5000 }]));
+t((await S.elsewhereArrive(db, "C7", await S.doneElsewhere(db, "C7", "61030012"), "https://taxtools.tw")) === null, "earlier arrival yields to later one");
+sq.prepare("UPDATE line_kv SET v=? WHERE k='split:incoming:C7'").run(JSON.stringify([{ id: "b1", ts: Date.now() - 1000 }]));
+const q = await S.elsewhereArrive(db, "C7", await S.doneElsewhere(db, "C7", "88880001"), "https://taxtools.tw");
+const qj = JSON.stringify(q);
+t(q.length === 1 && /合併還是分開/.test(q[0].altText) && qj.includes("sp:pick:m:b1,b3") && qj.includes("sp:pick:s:b1,b3"), "two bills: ask merge or separate");
+const sep = await S.splitPostback({}, db, { chatId: "C7", data: "sp:pick:s:b1,b3", isAdmin: false, origin: "https://taxtools.tw" });
+t(sep.length === 2 && sep.every(m => /請款單/.test(m.altText)), "separate: two cards");
+const mg = await S.splitPostback({}, db, { chatId: "C7", data: "sp:pick:m:b1,b3", isAdmin: false, origin: "https://taxtools.tw" });
+const cj = JSON.stringify(mg[2] || {});
+t(mg.length === 3 && /合併/.test(mg[2].altText) && cj.includes("/split/v?m=") && !cj.includes("split?t="), "merge: two cards + combined " + mg.map(m => m.altText).join(" / "));
 const cc = await S.combinedForChat(db, "C7", "https://taxtools.tw");
 t(cc && /合併/.test(cc.altText), "combine on demand");
 t(S.combineCmd("兩張合併") && S.combineCmd("合併") && S.combineCmd("幫我把這兩張單合併") && !S.combineCmd("合併報表要怎麼做"), "combine command");

@@ -4,7 +4,7 @@ import { vendorReply } from "../../../lib/orders.js";
 import { toBlocks } from "../../../lib/files.js";
 import { verifySignature, lineClient, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
 import { watchCommit, settleCommit } from "../../../lib/commit.js";
-import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat } from "../../../lib/split.js";
+import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat, elsewhereArrive } from "../../../lib/split.js";
 import { chat, member, isGroup, kv, rid, rememberSent, quotedBot, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
 import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../../lib/books.js";
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
@@ -50,7 +50,10 @@ export async function onRequestPost({ request, env, waitUntil }) {
     catch (e) { console.log("queue send failed, handling inline", e.message); }
   }
   const runEnv = fromQueue ? { ...env, LONG_RUN: "1" } : env;
-  const work = (async () => { for (const ev of events) { try { await (bot === "miao" ? handleMiao(runEnv, ev, origin) : handle(runEnv, ev, origin)); } catch (e) { console.log("line event error", e.stack || e.message); } } })();
+  const one = ev => (bot === "miao" ? handleMiao(runEnv, ev, origin) : handle(runEnv, ev, origin)).catch(e => console.log("line event error", e.stack || e.message));
+  // 一次送來好幾張照片（例如同時貼兩張帳單）：一起處理，才看得出是「同時貼了好幾張」；其他訊息照順序
+  const allImages = events.length > 1 && events.every(ev => ev.type === "message" && ev.message?.type === "image");
+  const work = allImages ? Promise.all(events.map(one)) : (async () => { for (const ev of events) await one(ev); })();
   if (fromQueue || !waitUntil) await work; else waitUntil(work);
   return new Response("ok");
 }
@@ -470,11 +473,12 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
   }
   // 別的群組已經拆好的單：直接貼結果卡，不再問要不要拆
   const other = ex ? null : await doneElsewhere(db, chatId, billNo).catch(() => null);
-  if (other) return line.reply(ev.replyToken, await elsewhereMessages(db, other, origin || other.d.origin || "", chatId)).catch(e => console.log("elsewhere reply failed", e.message));
+  if (other) { const em = await elsewhereArrive(db, chatId, other, origin || other.d.origin || ""); return em ? line.reply(ev.replyToken, em).catch(e => console.log("elsewhere reply failed", e.message)) : null; }
   let r;
   try { r = await startSplit(env, db, { chatId, userId, imgs, billNo }); }
   catch (e) { console.log("split failed", e.message); r = { error: "帳單讀取失敗，等一下再試一次。" }; }
   const ew = await elsewhereAfterRead(db, chatId, r, origin).catch(() => null);
+  if (ew && !ew.length) return;   // 同時貼了好幾張：由最後一張回話
   if (ew) return line.reply(ev.replyToken, ew).catch(async e => { console.log("elsewhere reply failed, pushing", e.message); await line.push(chatId, ew).then(() => recordPush(db, chatId, 1)).catch(() => {}); });
   const adm = await adminFor(env, db, chatId).catch(() => null);
   const formUrl = !r.error ? (await formLink(db, origin, chatId, r.split.id)) || null : null;
