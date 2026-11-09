@@ -43,4 +43,10 @@ const cp = sq.prepare("SELECT * FROM line_splits WHERE chat_id='C9'").all();
 t(cp.length === 1 && cp[0].status === "ask" && JSON.parse(cp[0].data).guests.length === 3 && !JSON.parse(cp[0].data).payee && /帶好了/.test(hp[0].altText), "here: copied with guests, form " + JSON.stringify(hp).slice(0, 100));
 await S.splitPostback({}, db, { chatId: "C9", data: "sp:here:b1", isAdmin: true, origin: "https://taxtools.tw" });
 t(sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='C9'").get().n === 1, "here: no duplicate");
+// 單號寫法不同也對得到；讀完帳單才知道單號的，剛開的那筆取消、改給結果卡
+t((await S.doneElsewhere(db, "C8", "61030012-")).id === "b1" && (await S.doneElsewhere(db, "C8", "61030012[002-1]")).id === "b1", "bill no normalized");
+sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data) VALUES('n1','C8','61030012',?, 'ask', ?)").run(Date.now(), JSON.stringify({ bill_no: "61030012" }));
+const ar = await S.elsewhereAfterRead(db, "C8", { split: { id: "n1", d: { bill_no: "6103 0012" } } }, "https://taxtools.tw");
+t(ar && /已經拆好/.test(ar[0].text) && sq.prepare("SELECT status FROM line_splits WHERE id='n1'").get().status === "cancelled", "after read: cancel + result card");
+t(!(await S.elsewhereAfterRead(db, "C8", { merged: true, split: { id: "n1", d: { bill_no: "61030012" } } }, "")), "merged second photo untouched");
 console.log(`${ok} passed, ${bad} failed`);

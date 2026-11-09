@@ -30,7 +30,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes("api.anthropic.com")) {
     claudeCalls.push((/判斷這張照片是不是/.test(body.system) ? "check:" : "read:") + body.model + ":" + body.system.slice(0, 12));
     const txt = /判斷這張照片是不是/.test(body.system) ? JSON.stringify({ bill: isBill, bill_no: isBill ? (globalThis.billNoMock || "61020010[005-1]") : "" })
-      : /帳單判讀/.test(body.system) ? JSON.stringify(BILL) : /拆一張酒店帳單/.test(body.system) ? JSON.stringify(guestsAnswer || { answer: false }) : "好";
+      : /帳單判讀/.test(body.system) ? JSON.stringify(globalThis.billNoMock ? { ...BILL, bill_no: globalThis.billNoMock } : BILL) : /拆一張酒店帳單/.test(body.system) ? JSON.stringify(guestsAnswer || { answer: false }) : "好";
     return new Response(JSON.stringify({ content: [{ type: "text", text: txt }], stop_reason: "end_turn", usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200 });
   }
   if (u.includes("/content")) return new Response(new Uint8Array([255, 216, 255, 1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });

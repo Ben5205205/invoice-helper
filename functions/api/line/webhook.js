@@ -4,7 +4,7 @@ import { vendorReply } from "../../../lib/orders.js";
 import { toBlocks } from "../../../lib/files.js";
 import { verifySignature, lineClient, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
 import { watchCommit, settleCommit } from "../../../lib/commit.js";
-import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages } from "../../../lib/split.js";
+import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead } from "../../../lib/split.js";
 import { chat, member, isGroup, kv, rid, rememberSent, quotedBot, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
 import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../../lib/books.js";
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
@@ -473,6 +473,8 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
   let r;
   try { r = await startSplit(env, db, { chatId, userId, imgs, billNo }); }
   catch (e) { console.log("split failed", e.message); r = { error: "帳單讀取失敗，等一下再試一次。" }; }
+  const ew = await elsewhereAfterRead(db, chatId, r, origin).catch(() => null);
+  if (ew) return line.reply(ev.replyToken, ew).catch(async e => { console.log("elsewhere reply failed, pushing", e.message); await line.push(chatId, ew).then(() => recordPush(db, chatId, 1)).catch(() => {}); });
   const adm = await adminFor(env, db, chatId).catch(() => null);
   const formUrl = !r.error ? (await formLink(db, origin, chatId, r.split.id)) || null : null;
   const msgs = r.error ? [textMessage(r.error)] : askMessages(r.split, adm?.inChat ? adm.id : null, r.merged, formUrl);
