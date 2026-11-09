@@ -47,15 +47,19 @@ t(sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='C9'").get().n ==
 t((await S.doneElsewhere(db, "C8", "61030012-")).id === "b1" && (await S.doneElsewhere(db, "C8", "61030012[002-1]")).id === "b1", "bill no normalized");
 sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data) VALUES('n1','C8','61030012',?, 'ask', ?)").run(Date.now(), JSON.stringify({ bill_no: "61030012" }));
 const ar = await S.elsewhereAfterRead(db, "C8", { split: { id: "n1", d: { bill_no: "6103 0012" } } }, "https://taxtools.tw");
-t(ar && /已經拆好/.test(ar[0].text) && sq.prepare("SELECT status FROM line_splits WHERE id='n1'").get().status === "cancelled", "after read: cancel + result card");
+t(ar && /的單已經拆過了/.test(ar[0].text) && sq.prepare("SELECT status FROM line_splits WHERE id='n1'").get().status === "cancelled", "after read: cancel + result card");
 t(!(await S.elsewhereAfterRead(db, "C8", { merged: true, split: { id: "n1", d: { bill_no: "61030012" } } }, "")), "merged second photo untouched");
 // 別群拆好的單：直接出卡；同一天這群已經有別張單，就加問「要跟前面的單合併嗎？」；合併＝合併請款單、不用＝一句話
 sq.prepare("INSERT INTO line_splits(id,chat_id,bill_no,created,status,data,result,done_at) VALUES('b3','C1','88880001',?, 'done', ?, ?, ?)").run(Date.now(), JSON.stringify({ ...d, store: "世盟", bill_no: "88880001" }), JSON.stringify(res), Date.now());
 const one = await S.elsewhereArrive(db, "C7", await S.doneElsewhere(db, "C7", "61030012"), "https://taxtools.tw");
-t(one.length === 2 && /已經拆好/.test(one[0].text), "first bill today: card only");
-const two = await S.elsewhereArrive(db, "C7", await S.doneElsewhere(db, "C7", "88880001"), "https://taxtools.tw");
-const qj = JSON.stringify(two[2] || {});
-t(two.length === 3 && /請款單/.test(two[1].altText) && /合併嗎/.test(two[2].altText) && qj.includes("sp:cmb:b1,b3") && qj.includes("sp:nocmb"), "second bill same day: card + merge question");
+const oj = JSON.stringify(one);
+t(one.length === 2 && /^威士登 10\/30 的單已經拆過了，要重新拆，還是貼出拆好的單？$/.test(one[0].text) && oj.includes("sp:pick:s:b1") && oj.includes("sp:pick:r:b1"), "elsewhere: ask with store name " + one[0].text);
+const p1 = await S.splitPostback({}, db, { chatId: "C7", data: "sp:pick:s:b1", isAdmin: false, origin: "https://taxtools.tw" });
+t(p1.length === 1 && /請款單/.test(p1[0].altText), "post the done card (first today: no merge ask)");
+await S.elsewhereArrive(db, "C7", await S.doneElsewhere(db, "C7", "88880001"), "https://taxtools.tw");
+const two = await S.splitPostback({}, db, { chatId: "C7", data: "sp:pick:s:b3", isAdmin: false, origin: "https://taxtools.tw" });
+const qj = JSON.stringify(two[1] || {});
+t(two.length === 2 && /請款單/.test(two[0].altText) && /合併嗎/.test(two[1].altText) && qj.includes("sp:cmb:b1,b3") && qj.includes("sp:nocmb"), "second bill same day: card + merge question");
 t(/分開就好/.test((await S.splitPostback({}, db, { chatId: "C7", data: "sp:nocmb", isAdmin: false }))[0].text), "no merge");
 const mg = await S.splitPostback({}, db, { chatId: "C7", data: "sp:cmb:b1,b3", isAdmin: false, origin: "https://taxtools.tw" });
 const cj = JSON.stringify(mg[0] || {});
@@ -97,4 +101,11 @@ t(r.status === 200 && /Jim/.test(r.html) && !/<span>Ben<\/span>/.test(r.html) &&
 // 回覆引用對方的訊息
 const L = await import(R + "/lib/line.js");
 t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteToken === "QT" && !L.withQuote([{ type: "flex" }], "QT")[0].quoteToken, "quote first text message");
+// 中間有別的訊息才引用；直接接著回不引用
+{ const ev = { timestamp: Date.now() - 10000, source: { userId: "U1" }, message: { id: "m1", type: "image", quoteToken: "QT" } };
+  t(!(await L.interrupted(db, "C2", ev)), "no other messages: no quote");
+  sq.prepare("INSERT INTO line_msgs(chat_id,user_id,name,text,ts,media) VALUES('C2','U1','Ben','［傳了一張照片］',?, 'm1')").run(Date.now());
+  t(!(await L.interrupted(db, "C2", ev)), "own message row ignored");
+  sq.prepare("INSERT INTO line_msgs(chat_id,user_id,name,text,ts) VALUES('C2','U2','Jim','哈哈',?)").run(Date.now());
+  t(await L.interrupted(db, "C2", ev), "someone talked in between: quote"); }
 console.log(`${ok} passed, ${bad} failed`);

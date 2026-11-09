@@ -171,7 +171,7 @@ t(sq.prepare("SELECT count(*) n FROM line_splits").get().n === 2 && /請填寫�
 // 10b. 別的群組已經拆好的同一張單：直接給結果卡，不問要不要拆、不重讀帳單
 isBill = true; claudeCalls.length = 0;
 await send({ type: "message", source: { type: "user", userId: "U_ben" }, message: { type: "image", id: "dm0" } });
-t(/已經拆好/.test(replies()[0]?.text || "") && /請款單/.test(replies()[1]?.altText || "") && !claudeCalls.some(c => /^read:/.test(c)), "bill done in another group → result card " + JSON.stringify(replies()).slice(0, 120));
+t(/的單已經拆過了，要重新拆，還是貼出拆好的單/.test(replies()[0]?.text || "") && /sp:pick:s:/.test(JSON.stringify(replies()[1] || {})) && !claudeCalls.some(c => /^read:/.test(c)), "bill done in another group → result card " + JSON.stringify(replies()).slice(0, 120));
 // 11. 私訊（Ben）傳帳單照片：也直接給表單，不走一般分析（換一張沒拆過的單）
 globalThis.billNoMock = "70000001"; claudeCalls.length = 0;
 await send({ type: "message", source: { type: "user", userId: "U_ben" }, message: { type: "image", id: "dm1" } });

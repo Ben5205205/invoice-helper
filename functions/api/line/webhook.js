@@ -64,7 +64,8 @@ export async function forgetChat(db, chatId) {
 }
 
 async function handle(env, ev, origin) {
-  const db = env.DB, line = quoting(lineClient(env.LINE_CHANNEL_TOKEN), ev);   // 回覆都引用對方那則訊息
+  const db = env.DB, src0 = ev.source || {};
+  const line = quoting(lineClient(env.LINE_CHANNEL_TOKEN), ev, db, src0.groupId || src0.roomId || src0.userId);   // 中間有別的訊息插進來才引用對方那則
   if (ev.webhookEventId) {
     const r = await db.prepare("INSERT OR IGNORE INTO line_events(id,ts) VALUES(?,?)").bind(ev.webhookEventId, Date.now()).run();
     if ((r.meta?.changes ?? 1) === 0) return;
