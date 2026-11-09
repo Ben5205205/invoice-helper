@@ -29,7 +29,7 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes("oauth2/v2.1/verify")) { const tk = new URLSearchParams(String(init.body)).get("id_token"); return tk === "bad" ? new Response("{}", { status: 400 }) : new Response(JSON.stringify({ sub: tk }), { status: 200 }); }
   if (u.includes("api.anthropic.com")) {
     claudeCalls.push((/判斷這張照片是不是/.test(body.system) ? "check:" : "read:") + body.model + ":" + body.system.slice(0, 12));
-    const txt = /判斷這張照片是不是/.test(body.system) ? JSON.stringify({ bill: isBill, bill_no: isBill ? "61020010[005-1]" : "" })
+    const txt = /判斷這張照片是不是/.test(body.system) ? JSON.stringify({ bill: isBill, bill_no: isBill ? (globalThis.billNoMock || "61020010[005-1]") : "" })
       : /帳單判讀/.test(body.system) ? JSON.stringify(BILL) : /拆一張酒店帳單/.test(body.system) ? JSON.stringify(guestsAnswer || { answer: false }) : "好";
     return new Response(JSON.stringify({ content: [{ type: "text", text: txt }], stop_reason: "end_turn", usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200 });
   }
@@ -168,10 +168,15 @@ await say("U_ben", "關掉拆帳。"); t(sq.prepare("SELECT v FROM line_kv WHERE
 await photo("U_andy", "p9"); t(!claudeCalls.length, "off again");
 await send({ type: "message", source: { type: "group", groupId: G, userId: "U_andy" }, message: { type: "text", id: "q1", text: "@小幫手 拆帳", quotedMessageId: "p9", mention: { mentionees: [{ index: 0, length: 4, isSelf: true }] } } });
 t(sq.prepare("SELECT count(*) n FROM line_splits").get().n === 2 && /請填寫表單/.test(replies()[0]?.altText || ""), "manual 拆帳 by reply");
-// 11. 私訊（Ben）傳帳單照片：也直接給表單，不走一般分析
+// 10b. 別的群組已經拆好的同一張單：直接給結果卡，不問要不要拆、不重讀帳單
 isBill = true; claudeCalls.length = 0;
+await send({ type: "message", source: { type: "user", userId: "U_ben" }, message: { type: "image", id: "dm0" } });
+t(/已經拆好/.test(replies()[0]?.text || "") && /請款單/.test(replies()[1]?.altText || "") && !claudeCalls.some(c => /^read:/.test(c)), "bill done in another group → result card " + JSON.stringify(replies()).slice(0, 120));
+// 11. 私訊（Ben）傳帳單照片：也直接給表單，不走一般分析（換一張沒拆過的單）
+globalThis.billNoMock = "70000001"; claudeCalls.length = 0;
 await send({ type: "message", source: { type: "user", userId: "U_ben" }, message: { type: "image", id: "dm1" } });
 t(/如要拆單服務/.test(replies()[0]?.altText || "") && claudeCalls.filter(c => /^read:/.test(c)).length === 1 && sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='U_ben'").get().n === 1, "DM bill → form " + JSON.stringify(replies()).slice(0, 150));
+globalThis.billNoMock = null;
 // 12. 內嵌視窗：只有 Ben 能送；按鈕改成 liff.line.me；liff.state 轉址
 sq.prepare("INSERT INTO line_kv VALUES('liff:split','2012283214-XTQGE9lq')").run();
 const pl = body => fm.onRequestPost({ request: new Request(furl, { method: "POST", body: JSON.stringify(body) }), env });

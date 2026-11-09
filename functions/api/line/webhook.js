@@ -4,7 +4,7 @@ import { vendorReply } from "../../../lib/orders.js";
 import { toBlocks } from "../../../lib/files.js";
 import { verifySignature, lineClient, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
 import { watchCommit, settleCommit } from "../../../lib/commit.js";
-import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard } from "../../../lib/split.js";
+import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages } from "../../../lib/split.js";
 import { chat, member, isGroup, kv, rid, rememberSent, quotedBot, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
 import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../../lib/books.js";
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
@@ -467,6 +467,9 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
     const m = ex.status === "done" ? redoMessages(ex, url) : askMessages(ex, null, false, url);
     return line.reply(ev.replyToken, m).catch(e => console.log("same bill reply failed", e.message));
   }
+  // 別的群組已經拆好的單：直接貼結果卡，不再問要不要拆
+  const other = ex ? null : await doneElsewhere(db, chatId, billNo).catch(() => null);
+  if (other) return line.reply(ev.replyToken, await elsewhereMessages(db, other, origin || other.d.origin || "")).catch(e => console.log("elsewhere reply failed", e.message));
   let r;
   try { r = await startSplit(env, db, { chatId, userId, imgs, billNo }); }
   catch (e) { console.log("split failed", e.message); r = { error: "帳單讀取失敗，等一下再試一次。" }; }

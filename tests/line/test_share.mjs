@@ -28,4 +28,11 @@ t(r.status === 200 && r.html.includes("og:image") && r.html.includes("weishideng
 r = await get("v.js", "v?s=" + s + "&p=g1");
 t(r.html.includes("Jim") && r.html.includes("雀") && !/<b>Ben<\/b>/.test(r.html) && r.html.includes("og:title"), "person page only his share incl. merged");
 t((await get("v.js", "v?s=bogusbogusbogusbogus12")).status === 404, "bad token 404");
+// 別的群組已經拆好的單：直接給結果卡（連結是單張分享，不是原本群組的）
+sq.prepare("UPDATE line_splits SET bill_no='61030012', done_at=5, created=" + Date.now() + " WHERE id='b1'").run();
+t(!(await S.doneElsewhere(db, "C1", "61030012")), "same group is not elsewhere");
+const ow = await S.doneElsewhere(db, "C9", "6103 0012");
+t(ow && ow.id === "b1", "found in other group");
+const em = await S.elsewhereMessages(db, ow, "https://taxtools.tw"), ej = JSON.stringify(em);
+t(em.length === 2 && /已經拆好/.test(em[0].text) && ej.includes("/split/v?s=" + s) && !ej.includes("split?t=") && ej.includes("split/share?s="), "elsewhere card uses share links");
 console.log(`${ok} passed, ${bad} failed`);
