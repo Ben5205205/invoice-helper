@@ -16,7 +16,7 @@ def text(s):
     return html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", s))).strip()
 
 ORG = {"@type": "Organization", "name": "稅務小工具", "alternateName": "taxtools.tw", "url": f"{SITE}/",
-       "logo": f"{SITE}/icon-512.png", "email": "art13@doesart13.com", "publishingPrinciples": f"{SITE}/about/"}
+       "logo": f"{SITE}/icon-512.png", "email": "benwu0317@gmail.com", "publishingPrinciples": f"{SITE}/about/"}
 # 歡迎搜尋引擎與 AI 搜尋、AI 助理的爬蟲讀取公開內容（GEO：讓 AI 讀得到才會引用）
 AI_BOTS = ["Googlebot", "Bingbot", "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User",
            "PerplexityBot", "Perplexity-User", "Google-Extended", "Applebot", "Applebot-Extended", "DuckAssistBot", "Meta-ExternalAgent", "CCBot"]
