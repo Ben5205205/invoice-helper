@@ -70,18 +70,34 @@ t(S.combineCmd("兩張合併") && S.combineCmd("合併") && S.combineCmd("幫我
 const mtok = cj.match(/v\?m=([\w,]+)/)[1];
 r = await get("v.js", "v?m=" + mtok);
 t(r.status === 200 && /合併請款單/.test(r.html) && r.html.includes("世盟") && !r.html.includes("所有帳單") && r.html.includes("/split/v?s="), "public combined page");
-// 3 秒內連貼兩張別群拆好的單：只回一次「合併／分開／重新修改」；一張別群的＋一張新帳單＝各自處理
-S.BURST.gap = 80; S.BURST.settle = 100; S.BURST.poll = 10; S.BURST.max = 2000;
-const T0 = Date.now();
-await S.noteImage(db, "C5", "i1", T0); await S.noteImage(db, "C5", "i2", T0 + 30);
-const [g1, g2] = await Promise.all([S.settleDone(db, "C5", "i1", "b1"), (async () => { await new Promise(r => setTimeout(r, 20)); return S.settleDone(db, "C5", "i2", "b3"); })()]);
-const modes = [g1.mode, g2.mode].sort().join();
-t(modes === "group,skip" && [g1, g2].find(x => x.mode === "group").ids.sort().join() === "b1,b3", "burst: one group reply, other skips " + JSON.stringify([g1, g2]));
-await S.noteImage(db, "C4", "j1", T0); await S.noteImage(db, "C4", "j2", T0 + 30);
-await S.markImage(db, "C4", "j2", { k: "new" });
-t((await S.settleDone(db, "C4", "j1", "b1")).mode === "solo", "burst mixed with new bill: solo");
-await S.noteImage(db, "C3", "k1", Date.now());
-t((await S.settleDone(db, "C3", "k1", "b1")).mode === "solo", "single image: solo");
+// 同一批貼了好幾張：照片一收到就記；排隊一張一張處理時，前面的先不回（defer），最後判斷完的那張一起回
+S.BURST.first = 30; S.BURST.poll = 10; S.BURST.wait = 120; S.BURST.gap = 3000;
+const T0 = Date.now(), img = (id, ts, set) => ({ type: "message", source: { groupId: "C5" }, timestamp: ts, message: { type: "image", id, ...(set ? { imageSet: set } : {}) } });
+await S.noteImages(db, [img("i1", T0), img("i2", T0 + 100)]);
+const g1 = await S.decideBurst(db, "C5", "i1", { k: "done", id: "b1", qt: "Q1" });
+t(g1.mode === "defer", "sequential: first defers " + g1.mode);
+const g2 = await S.decideBurst(db, "C5", "i2", { k: "done", id: "b3", qt: "Q2" });
+t(g2.mode === "go" && g2.done.map(x => x.id).sort().join() === "b1,b3", "sequential: last answers for both " + JSON.stringify(g2));
+const bm = await S.burstMessages(db, "C5", g2.done, "https://taxtools.tw");
+t(bm[0].quoteToken === "Q2" && /都已拆過/.test(bm[0].text) && /sp:pick:m:/.test(JSON.stringify(bm[1])), "burst reply: quoted pick");
+await S.noteImages(db, [{ ...img("c1", T0), source: { groupId: "C6" } }, { ...img("c2", T0 + 50), source: { groupId: "C6" } }]);
+const [h1, h2] = await Promise.all([S.decideBurst(db, "C6", "c1", { k: "done", id: "b1" }), S.decideBurst(db, "C6", "c2", { k: "done", id: "b3" })]);
+t([h1.mode, h2.mode].sort().join() === "go,skip", "concurrent: one answers " + [h1.mode, h2.mode]);
+// 一張別群拆好的＋一張新帳單：新帳單那張判斷完時替前一張推播回覆
+await S.noteImages(db, [{ ...img("d1", T0), source: { groupId: "C4" } }, { ...img("d2", T0 + 50), source: { groupId: "C4" } }]);
+t((await S.decideBurst(db, "C4", "d1", { k: "done", id: "b1", qt: "QD" })).mode === "defer", "mixed: done one defers");
+const pushed = []; await S.flushBurst(db, { push: async (to, m) => pushed.push(m) }, "C4", "d2", { k: "new" }, "https://taxtools.tw");
+t(pushed.length === 1 && /單已拆過/.test(pushed[0][0].text) && pushed[0][0].quoteToken === "QD", "mixed: new-bill photo flushes the waiting one");
+// 只有一張
+await S.noteImages(db, [{ ...img("e1", T0), source: { groupId: "C3" } }]);
+const e1 = await S.decideBurst(db, "C3", "e1", { k: "done", id: "b1" });
+t(e1.mode === "go" && e1.done.length === 1, "single: go");
+// imageSet：張數沒到齊不決定
+await S.noteImages(db, [{ ...img("s1", T0, { id: "SET", index: 1, total: 2 }), source: { groupId: "C2" } }]);
+t((await S.decideBurst(db, "C2", "s1", { k: "done", id: "b1" })).mode === "defer", "imageSet: waits for the rest");
+await S.noteImages(db, [{ ...img("s2", T0 + 5000, { id: "SET", index: 2, total: 2 }), source: { groupId: "C2" } }]);
+t((await S.decideBurst(db, "C2", "s2", { k: "done", id: "b3" })).done.length === 2, "imageSet: complete set answers together");
+t(S.combineCmd("合併出單") && S.combineCmd("兩張一起算"), "combine phrasing");
 const pm = await S.pickMessages(db, ["b1", "b3"]), pj = JSON.stringify(pm);
 t(/都已拆過，要合併還是分開/.test(pm[0].altText) && pj.includes("sp:pick:m:b1,b3") && pj.includes("sp:pick:s:b1,b3") && pj.includes("sp:pick:r:b1,b3"), "pick card 3 options");
 let pr = await S.splitPostback({}, db, { chatId: "C5", data: "sp:pick:m:b1,b3", isAdmin: false, origin: "https://taxtools.tw" });
@@ -122,12 +138,4 @@ t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteTok
   t(S.billDate("61106022-13012", n) === "11/6" && S.billDate("61030012", n) === "10/30" && S.billDate("1106015-530008", n) === "11/6" && S.billDate("610210091", n) === "10/21", "date from bill no");
   t(S.billDate("ABC", n) === "11/9" && S.billDate("", Date.UTC(2026, 10, 8, 20)) === "11/8", "fallback today (before 6am = previous night)");
   t(S.billLabel({ store: "威思汀", bill_no: "61106022" }) === "威思汀 11/6", "label always has date"); }
-// LINE 一次選好幾張（imageSet）：等張數到齊才決定；晚到的那張也不會先各自回
-{ const T1 = Date.now();
-  await S.noteImage(db, "C2", "s1", T1, { id: "SET1", total: 2 });
-  const p1 = S.settleDone(db, "C2", "s1", "b1");
-  await new Promise(r => setTimeout(r, 300));   // 第二張晚到
-  await S.noteImage(db, "C2", "s2", T1 + 1, { id: "SET1", total: 2 });
-  const [a1, a2] = await Promise.all([p1, S.settleDone(db, "C2", "s2", "b3")]);
-  t([a1.mode, a2.mode].sort().join() === "group,skip", "imageSet: waits for all, one group reply " + JSON.stringify([a1, a2])); }
 console.log(`${ok} passed, ${bad} failed`);

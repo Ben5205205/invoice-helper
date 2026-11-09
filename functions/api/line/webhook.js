@@ -4,7 +4,7 @@ import { vendorReply } from "../../../lib/orders.js";
 import { toBlocks } from "../../../lib/files.js";
 import { verifySignature, lineClient, quoting, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
 import { watchCommit, settleCommit } from "../../../lib/commit.js";
-import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat, elsewhereArrive, noteImage, markImage, settleDone, pickMessages, quoteBill, billLabel, rememberQuote } from "../../../lib/split.js";
+import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat, elsewhereArrive, noteImage, noteImages, markImage, decideBurst, burstMessages, flushBurst, pickMessages, quoteBill, billLabel, rememberQuote } from "../../../lib/split.js";
 import { chat, member, isGroup, kv, rid, rememberSent, quotedBot, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
 import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../../lib/books.js";
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
@@ -45,6 +45,8 @@ export async function onRequestPost({ request, env, waitUntil }) {
   // 有排隊服務（Cloudflare Queues）時：先排隊、立刻回 LINE；排隊服務再把同一包（含 LINE 簽章）送回來，
   // 這時連線會一直開著，可以慢慢想（最多 15 分鐘），不受「回覆後只剩 30 秒」的限制。
   const fromQueue = request.headers.get("x-from-queue") === "1";
+  // 照片一收到就先記下來（排隊處理是一張一張來的，這樣才知道「同一批貼了幾張」）
+  if (bot === "main") await noteImages(env.DB, events).catch(() => {});
   if (!fromQueue && env.JOBS && events.length) {
     try { await env.JOBS.send({ body, sig: request.headers.get("x-line-signature") }); return new Response("queued"); }
     catch (e) { console.log("queue send failed, handling inline", e.message); }
@@ -170,8 +172,8 @@ async function handle(env, ev, origin) {
           const img = await line.content(msg.id, 4.5 * 1024 * 1024);
           const hit = await looksLikeBill(env, db, chatId, img, sm === "strict");
           if (hit) return billReply(env, db, line, ev, chatId, userId, [img], hit.bill_no, origin);
-          await markImage(db, chatId, msg.id, { k: "other" });
-        } catch (e) { console.log("bill check", e.message); await markImage(db, chatId, msg.id, { k: "other" }).catch(() => {}); }
+          await flushBurst(db, line, chatId, msg.id, { k: "other" }, origin);
+        } catch (e) { console.log("bill check", e.message); await flushBurst(db, line, chatId, msg.id, { k: "other" }, origin).catch(() => {}); }
       }
       else if (msg.type === "file" && !who.optout) await record(db, chatId, userId, who.name, `［傳了檔案：${msg.fileName || "檔案"}］`, "file:" + msg.id);
       // 私人助理群：照片、檔案先記著不存、不回；老闆說「存 標題」才存
@@ -185,8 +187,8 @@ async function handle(env, ev, origin) {
         const img = await line.content(msg.id, 4.5 * 1024 * 1024);
         const hit = await looksLikeBill(env, db, chatId, img);
         if (hit) { await line.loading(userId, 60).catch(() => {}); return billReply(env, db, line, ev, chatId, userId, [img], hit.bill_no, origin); }
-        await markImage(db, chatId, msg.id, { k: "other" });
-      } catch (e) { console.log("dm bill check", e.message); await markImage(db, chatId, msg.id, { k: "other" }).catch(() => {}); }
+        await flushBurst(db, line, chatId, msg.id, { k: "other" }, origin);
+      } catch (e) { console.log("dm bill check", e.message); await flushBurst(db, line, chatId, msg.id, { k: "other" }, origin).catch(() => {}); }
     }
     if (video) return answer({ env, db, line, ev, chatId, userId, userName: who.name, origin, chips }, VIDEO_ASK, "（傳了影片）", { id: msg.id, name: msg.fileName || "", video: true, duration: msg.duration, file: msg.type === "file" });
     if (audio) return answer({ env, db, line, ev, chatId, userId, userName: who.name, origin, chips }, AUDIO_ASK, "（傳了錄音）", { id: msg.id, name: msg.fileName || "", audio: true, duration: msg.duration });
@@ -472,7 +474,7 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
   // 同一張單又貼一次：拆過了→問要不要重新拆；拆到一半（超過 15 分鐘，不是補第二張）→再給表單。都不重讀帳單
   const ex = await sameBill(db, chatId, billNo).catch(() => null);
   if (ex && (ex.status === "done" || Date.now() - ex.created > 15 * 60e3)) {
-    await markImage(db, chatId, ev.message?.type === "image" ? ev.message.id : null, { k: "new" });
+    await flushBurst(db, line, chatId, ev.message?.type === "image" ? ev.message.id : null, { k: "new" }, origin);
     const url = await formLink(db, origin, chatId, ex.id);
     const qt = ev.message?.quoteToken;
     const m = ex.status === "done" ? quoteBill(redoMessages(ex, url), qt, `${billLabel(ex.d)} 單已拆過帳，要重新拆嗎？`) : quoteBill(askMessages(ex, null, false, url), qt, `${billLabel(ex.d)} 單還沒拆完，請填表單`);
@@ -482,17 +484,16 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
   const other = ex ? null : await doneElsewhere(db, chatId, billNo).catch(() => null);
   const mid = ev.message?.type === "image" ? ev.message.id : null;
   if (other) {
-    // 3 秒內連貼好幾張別群拆好的單：等這批都判斷完，只回一次「合併／分開／重新修改」
-    const st = await settleDone(db, chatId, mid, other.id);
-    if (st.mode === "skip") return;
+    // 同一批貼了好幾張：最後判斷完的那張一起回（2 張以上問合併／分開／重新修改）
     const qt = ev.message?.quoteToken;
     await rememberQuote(db, chatId, other.id, qt);
-    const pm = st.mode === "group" ? await pickMessages(db, st.ids) : null;
-    const em = pm ? quoteBill(pm, qt, pm[0].altText)
-      : quoteBill(await elsewhereArrive(db, chatId, other, origin || other.d.origin || ""), qt, `${billLabel(other.d)} 單已拆過`);
+    const st = await decideBurst(db, chatId, mid, { k: "done", id: other.id, qt });
+    if (st.mode !== "go") return;
+    const em = await burstMessages(db, chatId, st.done, origin);
+    if (!em.length) return;
     return line.reply(ev.replyToken, em).catch(async e => { console.log("elsewhere reply failed, pushing", e.message); await line.push(chatId, em).then(() => recordPush(db, chatId, 1)).catch(() => {}); });
   }
-  await markImage(db, chatId, mid, { k: "new" });
+  await flushBurst(db, line, chatId, mid, { k: "new" }, origin);
   let r;
   try { r = await startSplit(env, db, { chatId, userId, imgs, billNo }); }
   catch (e) { console.log("split failed", e.message); r = { error: "帳單讀取失敗，等一下再試一次。" }; }
