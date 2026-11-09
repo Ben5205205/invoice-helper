@@ -80,10 +80,11 @@ export function detail(r, t, focus, pub = false) {
     </main>`;
 }
 
-export function combinedPage(bills, t, focus, billHref = null) {
+export function combinedPage(bills, t, focus, billHref = null, only = null) {
   const href = billHref || (id => `?t=${esc(t)}&id=${esc(id)}`);
   const c = combine(bills), pal = storeColors(bills.map(b => b.d.store || "帳單")), storeColor = n => pal[n || "帳單"] || pal[n];
-  const people = c.people.map(p => {
+  const me = only ? c.people.find(p => p.name === only) : null;
+  const people = c.people.filter(p => !me || p === me).map(p => {
     const vip = c.top !== null && p.total === c.top && c.top > 0;
     const stores = p.stores.map(s => {
       const b = bills.find(x => x.id === s.id), res = b.res, d = b.d;
@@ -101,10 +102,10 @@ export function combinedPage(bills, t, focus, billHref = null) {
   }).join("");
   return `
     <header class="hero">${billHref ? "" : `<a class="back" href="?t=${esc(t)}">‹ 所有帳單</a>`}
-      <div class="kicker">合併請款單（${bills.length} 張）</div><h1>${bills.map(b => esc(b.d.store || "帳單")).join("＋")}</h1>
+      <div class="kicker">合併請款單（${bills.length} 張）</div><h1>${me ? esc(me.name) : bills.map(b => esc(b.d.store || "帳單")).join("＋")}</h1>${me ? `<div class="meta light">${bills.map(b => esc(b.d.store || "帳單")).join("＋")}</div>` : ""}
       <div class="storechips">${bills.map(b => { const sc = storeColor(b.d.store); return `<span style="background:${sc.tint};color:${sc.base}">${esc(b.d.store || "帳單")} $${fmt(b.res.total)}</span>`; }).join("")}</div>
-      <div class="total"><span>合計</span><b>$${fmt(c.total)}</b></div></header>
-    <main><h2>每個人（點開看每家店）</h2><section class="card people">${people}</section></main>`;
+      <div class="total"><span>${me ? "他的合計" : "合計"}</span><b>$${fmt(me ? me.total : c.total)}</b></div></header>
+    <main><h2>${me ? "每家店的明細" : "每個人（點開看每家店）"}</h2><section class="card people">${people}</section></main>`;
 }
 
 export function page(title, body, status = 200, head = "") {

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 const R = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const sq = new DatabaseSync(":memory:"); sq.exec(readFileSync(R + "/db/line.sql", "utf8"));
 const db = { prepare(q) { const st = sq.prepare(q); let a = []; const o = { bind(...x) { a = x.map(v => v === undefined ? null : v); return o; },
-  async first() { return st.get(...a) ?? null; }, async all() { return { results: st.all(...a) }; }, async run() { st.run(...a); return {}; } }; return o; } };
+  async first() { return st.get(...a) ?? null; }, async all() { return { results: st.all(...a) }; }, async run() { const x = st.run(...a); return { meta: { changes: Number(x.changes) } }; } }; return o; } };
 const S = await import(R + "/lib/split.js");
 let ok = 0, bad = 0; const t = (c, m) => { if (c) ok++; else { bad++; console.log("FAIL", m); } };
 const d = { store: "威士登", date: "10/30", cash: 10000, origin: "https://taxtools.tw", payee: "Jim",
@@ -66,4 +66,35 @@ t(S.combineCmd("兩張合併") && S.combineCmd("合併") && S.combineCmd("幫我
 const mtok = cj.match(/v\?m=([\w,]+)/)[1];
 r = await get("v.js", "v?m=" + mtok);
 t(r.status === 200 && /合併請款單/.test(r.html) && r.html.includes("世盟") && !r.html.includes("所有帳單") && r.html.includes("/split/v?s="), "public combined page");
+// 3 秒內連貼兩張別群拆好的單：只回一次「合併／分開／重新修改」；一張別群的＋一張新帳單＝各自處理
+S.BURST.gap = 80; S.BURST.poll = 10; S.BURST.max = 2000;
+const T0 = Date.now();
+await S.noteImage(db, "C5", "i1", T0); await S.noteImage(db, "C5", "i2", T0 + 30);
+const [g1, g2] = await Promise.all([S.settleDone(db, "C5", "i1", "b1"), (async () => { await new Promise(r => setTimeout(r, 20)); return S.settleDone(db, "C5", "i2", "b3"); })()]);
+const modes = [g1.mode, g2.mode].sort().join();
+t(modes === "group,skip" && [g1, g2].find(x => x.mode === "group").ids.sort().join() === "b1,b3", "burst: one group reply, other skips " + JSON.stringify([g1, g2]));
+await S.noteImage(db, "C4", "j1", T0); await S.noteImage(db, "C4", "j2", T0 + 30);
+await S.markImage(db, "C4", "j2", { k: "new" });
+t((await S.settleDone(db, "C4", "j1", "b1")).mode === "solo", "burst mixed with new bill: solo");
+await S.noteImage(db, "C3", "k1", Date.now());
+t((await S.settleDone(db, "C3", "k1", "b1")).mode === "solo", "single image: solo");
+const pm = await S.pickMessages(db, ["b1", "b3"]), pj = JSON.stringify(pm);
+t(/都已經拆過帳/.test(pm[0].altText) && pj.includes("sp:pick:m:b1,b3") && pj.includes("sp:pick:s:b1,b3") && pj.includes("sp:pick:r:b1,b3"), "pick card 3 options");
+let pr = await S.splitPostback({}, db, { chatId: "C5", data: "sp:pick:m:b1,b3", isAdmin: false, origin: "https://taxtools.tw" });
+const pmj = JSON.stringify(pr);
+t(pr.length === 1 && /合併/.test(pr[0].altText) && pmj.includes("split/share?m=") && pmj.includes('"label":"分享"'), "pick merge: combined card with share");
+pr = await S.splitPostback({}, db, { chatId: "C5", data: "sp:pick:s:b1,b3", isAdmin: false, origin: "https://taxtools.tw" });
+t(pr.length === 2 && pr.every(m => /請款單/.test(m.altText)), "pick separate: two cards");
+t(/只有 Ben/.test((await S.splitPostback({}, db, { chatId: "C5", data: "sp:pick:r:b1,b3", isAdmin: false, origin: "https://taxtools.tw" }))[0].text), "pick redo: admin only");
+pr = await S.splitPostback({}, db, { chatId: "C5", data: "sp:pick:r:b1,b3", isAdmin: true, origin: "https://taxtools.tw" });
+t(pr.length === 2 && sq.prepare("SELECT count(*) n FROM line_splits WHERE chat_id='C5' AND status='ask'").get().n === 2, "pick redo: two forms");
+// 合併請款單的分享頁、個人合計頁
+const mt = pmj.match(/split\/share\?m=([\w,]+)/)[1];
+r = await get("share.js", "share?m=" + mt);
+t(r.status === 200 && /整份合併單/.test(r.html) && (r.html.match(/line\.me\/R\/share/g) || []).length >= 3, "combined share page");
+r = await get("v.js", "v?m=" + mt + "&p=Jim");
+t(r.status === 200 && /Jim/.test(r.html) && !/<span>Ben<\/span>/.test(r.html) && /他的合計/.test(r.html), "combined person page only him");
+// 回覆引用對方的訊息
+const L = await import(R + "/lib/line.js");
+t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteToken === "QT" && !L.withQuote([{ type: "flex" }], "QT")[0].quoteToken, "quote first text message");
 console.log(`${ok} passed, ${bad} failed`);

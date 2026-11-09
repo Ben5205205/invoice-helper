@@ -2,9 +2,9 @@
 // 先回 200 給 LINE，再在背景處理；所有回覆都用回覆權杖（不計每月則數）。
 import { vendorReply } from "../../../lib/orders.js";
 import { toBlocks } from "../../../lib/files.js";
-import { verifySignature, lineClient, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
+import { verifySignature, lineClient, quoting, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
 import { watchCommit, settleCommit } from "../../../lib/commit.js";
-import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat, elsewhereArrive } from "../../../lib/split.js";
+import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat, elsewhereArrive, noteImage, markImage, settleDone, pickMessages } from "../../../lib/split.js";
 import { chat, member, isGroup, kv, rid, rememberSent, quotedBot, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
 import { gas, getBook, saveBook, admins, isAdmin, settlePending } from "../../../lib/books.js";
 import { buildReport, reportText, recordPush } from "../../../lib/usage.js";
@@ -64,7 +64,7 @@ export async function forgetChat(db, chatId) {
 }
 
 async function handle(env, ev, origin) {
-  const db = env.DB, line = lineClient(env.LINE_CHANNEL_TOKEN);
+  const db = env.DB, line = quoting(lineClient(env.LINE_CHANNEL_TOKEN), ev);   // 回覆都引用對方那則訊息
   if (ev.webhookEventId) {
     const r = await db.prepare("INSERT OR IGNORE INTO line_events(id,ts) VALUES(?,?)").bind(ev.webhookEventId, Date.now()).run();
     if ((r.meta?.changes ?? 1) === 0) return;
@@ -165,10 +165,12 @@ async function handle(env, ev, origin) {
       const sm = msg.type === "image" && !(await kv.get(db, "miao:in:" + chatId)) ? await splitMode(db, chatId) : "off";
       if (sm !== "off" && env.ANTHROPIC_API_KEY && (await budgetLeft(env, db))) {
         try {
+          await noteImage(db, chatId, msg.id, ev.timestamp || Date.now());
           const img = await line.content(msg.id, 4.5 * 1024 * 1024);
           const hit = await looksLikeBill(env, db, chatId, img, sm === "strict");
           if (hit) return billReply(env, db, line, ev, chatId, userId, [img], hit.bill_no, origin);
-        } catch (e) { console.log("bill check", e.message); }
+          await markImage(db, chatId, msg.id, { k: "other" });
+        } catch (e) { console.log("bill check", e.message); await markImage(db, chatId, msg.id, { k: "other" }).catch(() => {}); }
       }
       else if (msg.type === "file" && !who.optout) await record(db, chatId, userId, who.name, `［傳了檔案：${msg.fileName || "檔案"}］`, "file:" + msg.id);
       // 私人助理群：照片、檔案先記著不存、不回；老闆說「存 標題」才存
@@ -178,10 +180,12 @@ async function handle(env, ev, origin) {
     // 私訊（只有 Ben）傳帳單照片：跟群組一樣直接給拆帳表單，不先分析帳目
     if (msg.type === "image" && env.ANTHROPIC_API_KEY && (await budgetLeft(env, db))) {
       try {
+        await noteImage(db, chatId, msg.id, ev.timestamp || Date.now());
         const img = await line.content(msg.id, 4.5 * 1024 * 1024);
         const hit = await looksLikeBill(env, db, chatId, img);
         if (hit) { await line.loading(userId, 60).catch(() => {}); return billReply(env, db, line, ev, chatId, userId, [img], hit.bill_no, origin); }
-      } catch (e) { console.log("dm bill check", e.message); }
+        await markImage(db, chatId, msg.id, { k: "other" });
+      } catch (e) { console.log("dm bill check", e.message); await markImage(db, chatId, msg.id, { k: "other" }).catch(() => {}); }
     }
     if (video) return answer({ env, db, line, ev, chatId, userId, userName: who.name, origin, chips }, VIDEO_ASK, "（傳了影片）", { id: msg.id, name: msg.fileName || "", video: true, duration: msg.duration, file: msg.type === "file" });
     if (audio) return answer({ env, db, line, ev, chatId, userId, userName: who.name, origin, chips }, AUDIO_ASK, "（傳了錄音）", { id: msg.id, name: msg.fileName || "", audio: true, duration: msg.duration });
@@ -467,13 +471,22 @@ async function billReply(env, db, line, ev, chatId, userId, imgs, billNo, origin
   // 同一張單又貼一次：拆過了→問要不要重新拆；拆到一半（超過 15 分鐘，不是補第二張）→再給表單。都不重讀帳單
   const ex = await sameBill(db, chatId, billNo).catch(() => null);
   if (ex && (ex.status === "done" || Date.now() - ex.created > 15 * 60e3)) {
+    await markImage(db, chatId, ev.message?.type === "image" ? ev.message.id : null, { k: "new" });
     const url = await formLink(db, origin, chatId, ex.id);
     const m = ex.status === "done" ? redoMessages(ex, url) : askMessages(ex, null, false, url);
     return line.reply(ev.replyToken, m).catch(e => console.log("same bill reply failed", e.message));
   }
   // 別的群組已經拆好的單：直接貼結果卡，不再問要不要拆
   const other = ex ? null : await doneElsewhere(db, chatId, billNo).catch(() => null);
-  if (other) { const em = await elsewhereArrive(db, chatId, other, origin || other.d.origin || ""); return em ? line.reply(ev.replyToken, em).catch(e => console.log("elsewhere reply failed", e.message)) : null; }
+  const mid = ev.message?.type === "image" ? ev.message.id : null;
+  if (other) {
+    // 3 秒內連貼好幾張別群拆好的單：等這批都判斷完，只回一次「合併／分開／重新修改」
+    const st = await settleDone(db, chatId, mid, other.id);
+    if (st.mode === "skip") return;
+    const em = st.mode === "group" ? await pickMessages(db, st.ids) : await elsewhereArrive(db, chatId, other, origin || other.d.origin || "");
+    return line.reply(ev.replyToken, em).catch(async e => { console.log("elsewhere reply failed, pushing", e.message); await line.push(chatId, em).then(() => recordPush(db, chatId, 1)).catch(() => {}); });
+  }
+  await markImage(db, chatId, mid, { k: "new" });
   let r;
   try { r = await startSplit(env, db, { chatId, userId, imgs, billNo }); }
   catch (e) { console.log("split failed", e.message); r = { error: "帳單讀取失敗，等一下再試一次。" }; }
