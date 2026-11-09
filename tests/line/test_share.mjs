@@ -71,7 +71,7 @@ const mtok = cj.match(/v\?m=([\w,]+)/)[1];
 r = await get("v.js", "v?m=" + mtok);
 t(r.status === 200 && /合併請款單/.test(r.html) && r.html.includes("世盟") && !r.html.includes("所有帳單") && r.html.includes("/split/v?s="), "public combined page");
 // 3 秒內連貼兩張別群拆好的單：只回一次「合併／分開／重新修改」；一張別群的＋一張新帳單＝各自處理
-S.BURST.gap = 80; S.BURST.poll = 10; S.BURST.max = 2000;
+S.BURST.gap = 80; S.BURST.settle = 100; S.BURST.poll = 10; S.BURST.max = 2000;
 const T0 = Date.now();
 await S.noteImage(db, "C5", "i1", T0); await S.noteImage(db, "C5", "i2", T0 + 30);
 const [g1, g2] = await Promise.all([S.settleDone(db, "C5", "i1", "b1"), (async () => { await new Promise(r => setTimeout(r, 20)); return S.settleDone(db, "C5", "i2", "b3"); })()]);
@@ -122,4 +122,12 @@ t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteTok
   t(S.billDate("61106022-13012", n) === "11/6" && S.billDate("61030012", n) === "10/30" && S.billDate("1106015-530008", n) === "11/6" && S.billDate("610210091", n) === "10/21", "date from bill no");
   t(S.billDate("ABC", n) === "11/9" && S.billDate("", Date.UTC(2026, 10, 8, 20)) === "11/8", "fallback today (before 6am = previous night)");
   t(S.billLabel({ store: "威思汀", bill_no: "61106022" }) === "威思汀 11/6", "label always has date"); }
+// LINE 一次選好幾張（imageSet）：等張數到齊才決定；晚到的那張也不會先各自回
+{ const T1 = Date.now();
+  await S.noteImage(db, "C2", "s1", T1, { id: "SET1", total: 2 });
+  const p1 = S.settleDone(db, "C2", "s1", "b1");
+  await new Promise(r => setTimeout(r, 300));   // 第二張晚到
+  await S.noteImage(db, "C2", "s2", T1 + 1, { id: "SET1", total: 2 });
+  const [a1, a2] = await Promise.all([p1, S.settleDone(db, "C2", "s2", "b3")]);
+  t([a1.mode, a2.mode].sort().join() === "group,skip", "imageSet: waits for all, one group reply " + JSON.stringify([a1, a2])); }
 console.log(`${ok} passed, ${bad} failed`);

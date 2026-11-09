@@ -166,7 +166,7 @@ async function handle(env, ev, origin) {
       const sm = msg.type === "image" && !(await kv.get(db, "miao:in:" + chatId)) ? await splitMode(db, chatId) : "off";
       if (sm !== "off" && env.ANTHROPIC_API_KEY && (await budgetLeft(env, db))) {
         try {
-          await noteImage(db, chatId, msg.id, ev.timestamp || Date.now());
+          await noteImage(db, chatId, msg.id, ev.timestamp || Date.now(), msg.imageSet);
           const img = await line.content(msg.id, 4.5 * 1024 * 1024);
           const hit = await looksLikeBill(env, db, chatId, img, sm === "strict");
           if (hit) return billReply(env, db, line, ev, chatId, userId, [img], hit.bill_no, origin);
@@ -181,7 +181,7 @@ async function handle(env, ev, origin) {
     // 私訊（只有 Ben）傳帳單照片：跟群組一樣直接給拆帳表單，不先分析帳目
     if (msg.type === "image" && env.ANTHROPIC_API_KEY && (await budgetLeft(env, db))) {
       try {
-        await noteImage(db, chatId, msg.id, ev.timestamp || Date.now());
+        await noteImage(db, chatId, msg.id, ev.timestamp || Date.now(), msg.imageSet);
         const img = await line.content(msg.id, 4.5 * 1024 * 1024);
         const hit = await looksLikeBill(env, db, chatId, img);
         if (hit) { await line.loading(userId, 60).catch(() => {}); return billReply(env, db, line, ev, chatId, userId, [img], hit.bill_no, origin); }
