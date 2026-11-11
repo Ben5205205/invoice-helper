@@ -78,4 +78,12 @@ const p = await A.buildProfile(env, db, G);
 t(p && p.members[0].role === "幹部", "profile built");
 ms = await send("U_ben", "小幫手 誰負責收錢");
 t(/蚊子（男）：幹部，負責收錢/.test(JSON.stringify(chatted().system)) && /小幫手在這裡的角色：幫忙拆帳、算錢/.test(JSON.stringify(chatted().system)), "profile in chat prompt");
+// 引用群組裡別人說的話再 @小幫手：AI 看得到被引用的那句和誰說的
+{ await send("U_ben", "看到羽霏又想去舔腳了 麻煩");
+  const qid = "m" + (n - 1);
+  await send("U_if", "@小幫手 怎麼處理", { quotedMessageId: qid, mention: { mentionees: [{ type: "user", isSelf: true, index: 0, length: 4 }] } });
+  const last = JSON.stringify(chatted()?.messages?.at(-1) || "");
+  t(/引用了 Ben Wu 說的這句話/.test(last) && /羽霏又想去舔腳/.test(last), "quoted human message given to AI " + last.slice(0, 160));
+  await send("U_if", "@小幫手 這是什麼意思", { quotedMessageId: "unknown123", mention: { mentionees: [{ type: "user", isSelf: true, index: 0, length: 4 }] } });
+  t(/看不到內容/.test(JSON.stringify(chatted()?.messages?.at(-1) || "")), "unknown quoted message: AI told it can't see it"); }
 console.log(`${ok} passed, ${bad} failed`);
