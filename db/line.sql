@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS line_history (                                       
   id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS line_history_chat ON line_history(chat_id, id);
 CREATE TABLE IF NOT EXISTS line_msgs (                                                   -- 群組訊息紀錄（做總結用，保留 30 天）
-  id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, user_id TEXT, name TEXT, text TEXT NOT NULL, ts INTEGER NOT NULL, media TEXT);
+  id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL, user_id TEXT, name TEXT, text TEXT NOT NULL, ts INTEGER NOT NULL, media TEXT, msg_id TEXT);   -- msg_id：LINE 訊息代碼（有人引用時查原句）
 CREATE INDEX IF NOT EXISTS line_msgs_chat ON line_msgs(chat_id, ts);
 CREATE TABLE IF NOT EXISTS line_members (                                                -- 群組成員名稱、是否拒絕被記錄
   chat_id TEXT NOT NULL, user_id TEXT NOT NULL, name TEXT, optout INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL,
