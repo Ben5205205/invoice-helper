@@ -210,7 +210,7 @@ async function handle(env, ev, origin) {
   let addressed = !group || priv || self.length > 0 || typedAt || command !== null;   // @小幫手、按鈕送出的「/」指令；下面再判斷沒 @ 但是在跟它說話的
 
   // 群組裡的一般訊息只記錄，不回應
-  if (group && !who.optout && !(command && /^(不要記錄我|恢復記錄|清除紀錄)$/.test(command))) await record(db, chatId, userId, who.name, raw);
+  if (group && !who.optout && !(command && /^(不要記錄我|恢復記錄|清除紀錄)$/.test(command))) await record(db, chatId, userId, who.name, raw, null, msg.id);   // 記訊息代碼：之後有人引用這句，小幫手才知道引用的是什麼
   if (group) await vendorReply(env, db, line, chatId, userId, who.name, text).catch(e => console.log("vendor reply", e.message));
   // 沒叫小幫手、但說了自己要做的事（「我明天交報價」）：私訊問他要不要加成待辦
   // 疏文人員管理群：排班、工作表現不用 @，看懂就記下來並貼排班卡
@@ -465,7 +465,11 @@ async function handle(env, ev, origin) {
   }
   // 回覆（引用）的是小幫手自己傳的訊息：把那則內容一起給 AI，才知道「這些」「上面那個」指什麼
   const qb = !attach && msg.quotedMessageId ? await quotedBot(db, msg.quotedMessageId) : null;
-  const ask2 = qb ? `（${who.name} 是回覆你之前傳的這則訊息在問：「${qb.slice(0, 2500)}」）\n${ask}` : ask;
+  // 引用的是群組裡別人（或自己）說的話：把那句話和誰說的一起給 AI，才不會答非所問
+  const qh = !attach && !qb && msg.quotedMessageId ? await db.prepare("SELECT name,text FROM line_msgs WHERE chat_id=? AND msg_id=? LIMIT 1").bind(chatId, msg.quotedMessageId).first().catch(() => null) : null;
+  const ask2 = qb ? `（${who.name} 是回覆你之前傳的這則訊息在問：「${qb.slice(0, 2500)}」）\n${ask}`
+    : qh ? `（${who.name} 引用了 ${qh.name} 說的這句話：「${String(qh.text).slice(0, 1500)}」，他的問題是針對這句話；先弄懂這句話在說什麼，再回答他。）\n${ask}`
+    : msg.quotedMessageId && !attach ? `（${who.name} 引用了群組裡的一則訊息在問你，但那則訊息你看不到內容；看最近的對話推測他引用的是哪句，推測不出來就簡短問他是哪一句。）\n${ask}` : ask;
   return answer({ env, db, line, ev, chatId, userId, userName: who.name, origin, chips, rawText: raw }, ask2, ask, attach);
 }
 
@@ -623,8 +627,8 @@ async function todoChips(db, chatId) {
   return results.map(t => postback("✓ " + t.task, "done:" + t.id, "✓ 已完成：" + String(t.task).slice(0, 40)));
 }
 
-async function record(db, chatId, userId, name, text, media) {
-  await db.prepare("INSERT INTO line_msgs(chat_id,user_id,name,text,ts,media) VALUES(?,?,?,?,?,?)").bind(chatId, userId || null, name, String(text).slice(0, 2000), Date.now(), media || null).run();
+async function record(db, chatId, userId, name, text, media, msgId) {
+  await db.prepare("INSERT INTO line_msgs(chat_id,user_id,name,text,ts,media,msg_id) VALUES(?,?,?,?,?,?,?)").bind(chatId, userId || null, name, String(text).slice(0, 2000), Date.now(), media || null, msgId || null).run();
 }
 
 async function answer(ctx, text, logText, attach) {
