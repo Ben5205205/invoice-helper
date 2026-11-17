@@ -1,3 +1,4 @@
+import { receivablesTick } from "../../../lib/receivables.js";
 // POST /api/line/tick — 定時（約每 1 分鐘）呼叫：送出到期提醒，並清掉過期紀錄。
 // 不需要金鑰：重複呼叫也只會送出已到期且尚未送出的提醒（先標記再送，不會重複）。
 import { lineClient, mentionMessage, textMessage, say, doneCard } from "../../../lib/line.js";
@@ -21,6 +22,7 @@ export async function onRequestPost({ request, env }) {
   await kv.set(db, "tick:last", now);
   const line = lineClient(env.LINE_CHANNEL_TOKEN), origin = new URL(request.url).origin;
   const sent = { reminders: 0, failed: 0 };
+  try { const n = await receivablesTick(env, db, now); if (n) sent.receivables = n; } catch (e) { console.log("receivables tick", e.message); sent.failed++; }
 
   const { results } = await db.prepare("SELECT * FROM line_reminders WHERE status='open' AND due<=? ORDER BY due LIMIT 50").bind(now + 30e3).all();
   for (const r of results) {
