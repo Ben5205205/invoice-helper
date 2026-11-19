@@ -1,7 +1,8 @@
+import { rememberSent } from "../../../lib/assistant.js";
 import { receivablesTick } from "../../../lib/receivables.js";
 // POST /api/line/tick — 定時（約每 1 分鐘）呼叫：送出到期提醒，並清掉過期紀錄。
 // 不需要金鑰：重複呼叫也只會送出已到期且尚未送出的提醒（先標記再送，不會重複）。
-import { lineClient, mentionMessage, textMessage, say, doneCard } from "../../../lib/line.js";
+import { lineClient, lineHooks, mentionMessage, textMessage, say, doneCard } from "../../../lib/line.js";
 import { recordPush, monthlyReport, checkQuota, checkSpendAlert } from "../../../lib/usage.js";
 import { gas, gasConf } from "../../../lib/books.js";
 import { runFlows } from "../../../lib/orders.js";
@@ -20,6 +21,7 @@ export async function onRequestPost({ request, env }) {
   const last = Number(await kv.get(db, "tick:last")) || 0;
   if (now - last < 40e3) return Response.json({ ok: true, throttled: true });
   await kv.set(db, "tick:last", now);
+  lineHooks.sent = (res, msgs) => rememberSent(env.DB, res, msgs);   // 小幫手傳出的每則訊息都記下來，之後被引用才看得到
   const line = lineClient(env.LINE_CHANNEL_TOKEN), origin = new URL(request.url).origin;
   const sent = { reminders: 0, failed: 0 };
   try { const n = await receivablesTick(env, db, now); if (n) sent.receivables = n; } catch (e) { console.log("receivables tick", e.message); sent.failed++; }
