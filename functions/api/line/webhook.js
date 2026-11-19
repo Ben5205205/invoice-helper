@@ -2,7 +2,7 @@
 // 先回 200 給 LINE，再在背景處理；所有回覆都用回覆權杖（不計每月則數）。
 import { vendorReply } from "../../../lib/orders.js";
 import { toBlocks } from "../../../lib/files.js";
-import { verifySignature, lineClient, quoting, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
+import { verifySignature, lineClient, lineHooks, quoting, textMessage, say, postback, meetingCard, docCard, groupPicker, helpCard } from "../../../lib/line.js";
 import { watchCommit, settleCommit } from "../../../lib/commit.js";
 import { splitOn, splitMode, looksLikeBill, startSplit, askMessages, openSplit, splitPostback, splitToken, formLink, sameBill, redoMessages, replyCard, doneElsewhere, elsewhereMessages, elsewhereAfterRead, combineCmd, combinedForChat, elsewhereArrive, noteImage, noteImages, markImage, decideBurst, burstMessages, flushBurst, pickMessages, quoteBill, billLabel, rememberQuote } from "../../../lib/split.js";
 import { chat, member, isGroup, kv, rid, rememberSent, quotedBot, when, applyGroupPick, todoText, completeByText, KEEP_DAYS, HELP_GROUP, HELP_USER, JOIN_NOTICE } from "../../../lib/assistant.js";
@@ -44,6 +44,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
   const origin = new URL(request.url).origin;
   // 有排隊服務（Cloudflare Queues）時：先排隊、立刻回 LINE；排隊服務再把同一包（含 LINE 簽章）送回來，
   // 這時連線會一直開著，可以慢慢想（最多 15 分鐘），不受「回覆後只剩 30 秒」的限制。
+  lineHooks.sent = (res, msgs) => rememberSent(env.DB, res, msgs);   // 小幫手傳出的每則訊息都記下來，之後被引用才看得到
   const fromQueue = request.headers.get("x-from-queue") === "1";
   // 照片一收到就先記下來（排隊處理是一張一張來的，這樣才知道「同一批貼了幾張」）
   if (bot === "main") await noteImages(env.DB, events).catch(() => {});
