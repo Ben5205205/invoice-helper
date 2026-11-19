@@ -182,4 +182,12 @@ t(L.withQuote([{ type: "flex" }, { type: "text", text: "x" }], "QT")[1].quoteTok
   t((await hit("m=" + s + "," + s, "Mozilla/5.0 Line/14.1.0 LIFF")).status !== 302, "LIFF UA → no redirect loop");
   sq.prepare("DELETE FROM line_kv WHERE k='liff:share'").run();
   sq.prepare("DELETE FROM line_kv WHERE k='liff:share'").run(); }
+// 小幫手傳出的每則訊息（推播／回覆）都自動記下來，被引用時看得到原文
+{ const L2 = await import(R + "/lib/line.js"), A = await import(R + "/lib/assistant.js");
+  const of = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ sentMessages: [{ id: "900001" }, { id: "900002" }] }), { status: 200 });
+  L2.lineHooks.sent = (res, msgs) => A.rememberSent(db, res, msgs);
+  await L2.lineClient("x").push("C1", [{ type: "text", text: "@Ben 人手還沒排滿喔：11/20 蓋章 還缺 2 人" }, { type: "flex", altText: "排班表", contents: {} }]);
+  globalThis.fetch = of; L2.lineHooks.sent = null;
+  t((await A.quotedBot(db, "900001")) === "@Ben 人手還沒排滿喔：11/20 蓋章 還缺 2 人" && (await A.quotedBot(db, "900002")) === "排班表", "pushed messages remembered for quoting"); }
 console.log(`${ok} passed, ${bad} failed`);
