@@ -66,4 +66,5 @@ t(!(await B.interjectOn(db, "C1")), "off switch");
 t(/不必附和/.test(B.interjectAsk("旻", "x", { kind: "k", why: "y" })) && /不拖大/.test(B.interjectAsk("旻", "CTR 高就代表賣得好啊", { kind: "釐清", why: "y" })), "ask text");
 // 周瑜個性
 t(A.groupPersona("zhouyu", "Ben", false).includes("美周郎"), "zhouyu persona");
+t(A.groupPersona("dongpo", "Ben", false).includes("不合時宜") && A.groupPersona("dongpo", "Ben", false).includes("東家（Ben）"), "dongpo persona");
 console.log(`${ok} passed, ${bad} failed`); if (bad) process.exit(1);
