@@ -18,7 +18,7 @@ import { storeListText } from "../../../lib/stores.js";
 import { rankCmd, rankMessages } from "../../../lib/guests.js";
 import { setOwner } from "../../bo/index.js";
 import { handleMiao } from "../../../lib/miao.js";
-import { boostOn, autoRead } from "../../../lib/boost.js";
+import { boostOn, autoRead, interjectOn, shouldInterject, interjectAsk } from "../../../lib/boost.js";
 import { isAudioName, transcribe, saveTranscript, recordTranscribe, budgetLeft, findTranscripts, MAX_AUDIO } from "../../../lib/audio.js";
 
 const AUDIO_ASK = "（請整理這段錄音。第一行寫「1. 重點」，下面先一句話說這是什麼會議或在談什麼，再條列重點；有決定、待辦（誰／做什麼／何時）就在重點裡標明，沒有就省略。明確的待辦（有人、有事）直接用 add_todos 加入。有適合提醒的時間點（會議、截止日）就在最後一行寫「可提醒：」列出建議的時間和事項，但不要問要不要設。不要寫「2. 逐字稿」「3. 是否需要提醒」，也不要貼逐字稿或連結：這兩項系統會用卡片和按鈕附在下面。）";
@@ -244,6 +244,11 @@ async function handle(env, ev, origin) {
       && (await isForBot(env, db, { chatId, userId, name: who.name, text, ts: ev.timestamp || Date.now(), isAdmin: await isAdmin(db, userId) }))) addressed = true;
   }
   if (group && !addressed && !who.optout) await watchCommit(env, db, line, { chatId, userId, name: who.name, text: raw, replyToken: ev.replyToken, chatName: await kv.get(db, "name:" + chatId) }).catch(e => console.log("watchCommit", e.message));
+  // 全開模式的群組：沒人叫它，但說法不合邏輯、講不聽、氣氛僵了，可以自己出面（Ben 說「關閉插話」就不會）
+  if (group && !addressed && !who.optout && command === null && !priv && (await interjectOn(db, chatId)) && (await budgetLeft(env, db))) {
+    const d = await shouldInterject(env, db, { chatId, name: who.name, text: raw, ts: ev.timestamp || Date.now(), isAdmin: await isAdmin(db, userId) });
+    if (d) return answer({ env, db, line, ev, chatId, userId, userName: who.name, origin, chips: undefined, rawText: raw }, interjectAsk(who.name, raw, d), "（主動出面）");
+  }
   if (!addressed) return;
 
   // ---- 快速指令（不用 AI、不計費）----
@@ -339,6 +344,13 @@ async function handle(env, ev, origin) {
     if (/關|停/.test(sc)) { await db.prepare("DELETE FROM line_kv WHERE k=?").bind("boost:" + chatId).run(); return reply("好，這裡改回一般模式。"); }
     await kv.set(db, "boost:" + chatId, "1");
     return reply("好，這裡開成全開模式：回話用最強的模型、記得最近 7 天的對話；大家傳的照片和檔案我會先看過記重點，之後 @我 問就知道。每週一早上會私訊你上週的開銷。");
+  }
+  // ---- 主動插話：開啟／關閉（全開模式才有；只有管理員） ----
+  if (group && /^(開啟|打開|啟用|關閉|關掉|停用)(主動)?插話$/.test(sc)) {
+    if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能設定。");
+    if (/關|停/.test(sc)) { await kv.set(db, "ij:off:" + chatId, "1"); return reply("好，沒人叫我我就不出聲。"); }
+    await db.prepare("DELETE FROM line_kv WHERE k=?").bind("ij:off:" + chatId).run();
+    return reply((await boostOn(db, chatId)) ? "好，看到說不通、講不聽或氣氛僵的時候，我會自己出面。" : "好。不過主動插話要在全開模式才有，先說「開啟全開模式」。");
   }
   // ---- 疏文法會名冊：開啟／關閉（只有管理員） ----
   if (group && /^(開啟|啟用|關閉|停用)名冊(功能)?$/.test(sc)) {
