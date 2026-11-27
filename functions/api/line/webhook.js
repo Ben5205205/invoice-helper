@@ -18,6 +18,7 @@ import { storeListText } from "../../../lib/stores.js";
 import { rankCmd, rankMessages } from "../../../lib/guests.js";
 import { setOwner } from "../../bo/index.js";
 import { handleMiao } from "../../../lib/miao.js";
+import { boostOn, autoRead } from "../../../lib/boost.js";
 import { isAudioName, transcribe, saveTranscript, recordTranscribe, budgetLeft, findTranscripts, MAX_AUDIO } from "../../../lib/audio.js";
 
 const AUDIO_ASK = "（請整理這段錄音。第一行寫「1. 重點」，下面先一句話說這是什麼會議或在談什麼，再條列重點；有決定、待辦（誰／做什麼／何時）就在重點裡標明，沒有就省略。明確的待辦（有人、有事）直接用 add_todos 加入。有適合提醒的時間點（會議、截止日）就在最後一行寫「可提醒：」列出建議的時間和事項，但不要問要不要設。不要寫「2. 逐字稿」「3. 是否需要提醒」，也不要貼逐字稿或連結：這兩項系統會用卡片和按鈕附在下面。）";
@@ -177,6 +178,11 @@ async function handle(env, ev, origin) {
         } catch (e) { console.log("bill check", e.message); await flushBurst(db, line, chatId, msg.id, { k: "other" }, origin).catch(() => {}); }
       }
       else if (msg.type === "file" && !who.optout) await record(db, chatId, userId, who.name, `［傳了檔案：${msg.fileName || "檔案"}］`, "file:" + msg.id);
+      // 全開模式：不是帳單的照片、還有檔案，先讀過記重點（不回話），之後 @ 問就知道內容
+      if ((msg.type === "image" || (msg.type === "file" && !audio && !video)) && !who.optout && !priv && env.ANTHROPIC_API_KEY && (await boostOn(db, chatId)) && (await budgetLeft(env, db))) {
+        await autoRead(env, db, line, chatId, msg).catch(e => console.log("auto read", e.message));
+        return;
+      }
       // 私人助理群：照片、檔案先記著不存、不回；老闆說「存 標題」才存
       if (priv && ["image", "file", "audio", "video"].includes(msg.type)) { await addPending(db, chatId, { id: msg.id, type: msg.type, fileName: msg.fileName || "", ts: ev.timestamp || Date.now() }); return; }
       return;   // 群組裡的貼圖、照片、錄音不回應
@@ -326,6 +332,13 @@ async function handle(env, ev, origin) {
     const off = /關|正經/.test(sc), night = !off && /酒局|夜場|輕佻|放開/.test(sc);
     await kv.set(db, "persona:" + chatId, off ? "off" : night ? "night" : "charm");
     return reply(off ? "好，這裡我就正經一點說話。" : night ? "收到～這裡我就再放開一點 🥂" : "好呀～這裡照平常的我 😏");
+  }
+  // ---- 全開模式：最強模型、記比較久、照片檔案自動先讀（只有管理員） ----
+  if (group && /^(開啟|打開|啟用|關閉|關掉|停用)全開(模式)?$/.test(sc)) {
+    if (!(await isAdmin(db, userId))) return reply("這個只有 Ben 能設定。");
+    if (/關|停/.test(sc)) { await db.prepare("DELETE FROM line_kv WHERE k=?").bind("boost:" + chatId).run(); return reply("好，這裡改回一般模式。"); }
+    await kv.set(db, "boost:" + chatId, "1");
+    return reply("好，這裡開成全開模式：回話用最強的模型、記得最近 7 天的對話；大家傳的照片和檔案我會先看過記重點，之後 @我 問就知道。每週一早上會私訊你上週的開銷。");
   }
   // ---- 疏文法會名冊：開啟／關閉（只有管理員） ----
   if (group && /^(開啟|啟用|關閉|停用)名冊(功能)?$/.test(sc)) {
