@@ -12,6 +12,7 @@ import { cleanupTranscripts } from "../../../lib/audio.js";
 import { pendingCards, recomputeResults } from "../../../lib/split.js";
 import { rosterTick } from "../../../lib/roster.js";
 import { staffTick } from "../../../lib/staffing.js";
+import { weeklyCost } from "../../../lib/boost.js";
 import { kv, nextDue, ymd, hm, md, parseLocal, isGroup, KEEP_DAYS } from "../../../lib/assistant.js";
 
 export async function onRequestPost({ request, env }) {
@@ -83,6 +84,8 @@ export async function onRequestPost({ request, env }) {
   // 拆帳送出 10 分鐘還沒人按「貼出請款單」：推播請款卡（備援）
   try { const n = await pendingCards(env, db, line, now); if (n) sent.cards = n; } catch (e) { console.log("cards failed", e.message); }
 
+  // 每週一 09:00：私訊管理員上週的 AI 開銷
+  try { if (await weeklyCost(env, db, now)) sent.weekly = true; } catch (e) { console.log("weekly cost", e.message); }
   try { await checkSpendAlert(env, db); } catch (e) { console.log("spend alert failed", e.message); }
   try { await checkQuota(env, db, line, now); } catch (e) { console.log("quota failed", e.message); }
 
