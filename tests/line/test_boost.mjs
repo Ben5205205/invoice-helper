@@ -44,7 +44,7 @@ t(!(await B.weeklyCost(env, db, mon9 + 864e5)), "not tuesday");
 const txt = pushes[0]?.messages?.[0]?.text || "";
 t(pushes.length === 1 && pushes[0].to === "Uadmin", "pushed to admin once");
 t(/上週 AI 開銷（11\/23–11\/29）/.test(txt) && /全部：US\$2\.0\d/.test(txt) && /「96廣告分析」（全開模式）：US\$1\.5\d/.test(txt) && /Opus US\$1\.5\d/.test(txt) && /自動讀了 [01] 張/.test(txt) && !/US\$9\.00（/.test(txt), "report text\n" + txt);
-// 主動插話：判斷要出面才出面、冷卻 20 分鐘、半夜不插、關掉就不插、短訊息不判斷
+// 主動插話：判斷要出面才出面、3 分鐘內不連發、半夜也可以、關掉就不插、短訊息不判斷
 let judge = { speak: true, kind: "釐清", why: "CTR 和轉換率搞混了", confidence: 0.9 };
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, init) => String(url).includes("anthropic") && JSON.parse(init.body).max_tokens === 200
@@ -53,17 +53,17 @@ const day = Date.UTC(2026, 10, 28, 6, 0);   // 台北 14:00
 t(await B.interjectOn(db, "C1") && !(await B.interjectOn(db, "C9")), "interject follows boost");
 let d = await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "CTR 高就代表賣得好啊", ts: day });
 t(d && /CTR/.test(d.why), "speaks when judged");
-t(!(await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "CTR 高就代表賣得好啊", ts: day + 5 * 60e3 })), "cooldown 20 min");
-t(!!(await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "CTR 高就代表賣得好啊", ts: day + 21 * 60e3 })), "after cooldown");
+t(!(await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "CTR 高就代表賣得好啊", ts: day + 60e3 })), "no double within 3 min");
+t(!!(await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "CTR 高就代表賣得好啊", ts: day + 4 * 60e3 })), "after 3 min");
 t(!(await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "好", ts: day + 60 * 60e3 })), "short msg skipped");
-t(!(await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "CTR 高就代表賣得好啊", ts: Date.UTC(2026, 10, 28, 19, 0) })), "quiet hours (03:00)");
+t(!!(await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "CTR 高就代表賣得好啊", ts: Date.UTC(2026, 10, 28, 19, 0) })), "midnight ok (03:00)");
 judge = { speak: false, confidence: 0.9 };
 t(!(await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "今天午餐吃什麼好呢大家", ts: day + 120 * 60e3 })), "stays quiet when judged no");
 judge = { speak: true, kind: "緩頰", why: "x", confidence: 0.5 };
 t(!(await B.shouldInterject(env, db, { chatId: "C1", name: "旻", text: "你到底有沒有在聽啊", ts: day + 180 * 60e3 })), "low confidence quiet");
 await A.kv.set(db, "ij:off:C1", "1");
 t(!(await B.interjectOn(db, "C1")), "off switch");
-t(/不必附和/.test(B.interjectAsk("旻", "CTR 高就代表賣得好啊", { kind: "釐清", why: "y" })), "ask text");
+t(/不必附和/.test(B.interjectAsk("旻", "x", { kind: "k", why: "y" })) && /不拖大/.test(B.interjectAsk("旻", "CTR 高就代表賣得好啊", { kind: "釐清", why: "y" })), "ask text");
 // 周瑜個性
 t(A.groupPersona("zhouyu", "Ben", false).includes("美周郎"), "zhouyu persona");
 console.log(`${ok} passed, ${bad} failed`); if (bad) process.exit(1);
